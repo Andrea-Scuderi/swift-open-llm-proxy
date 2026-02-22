@@ -1,5 +1,7 @@
 # swift-open-llm-proxy
 
+> **Work in Progress** — This project is under active development. APIs, configuration, and behaviour may change without notice.
+
 A local Vapor proxy server that connects **Xcode 26.3 AI features** to **Amazon Bedrock** Claude models.
 
 Xcode speaks OpenAI and Anthropic API formats; Bedrock uses its own Converse API with AWS SigV4 auth. This proxy handles the translation transparently so you can use any Claude model on Bedrock as a backend for both Xcode Intelligence (code completions) and the Xcode Coding Agent (agentic coding).
