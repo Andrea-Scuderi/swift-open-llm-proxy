@@ -15,7 +15,7 @@ public func configure(_ app: Application) async throws {
     let bedrock = BedrockService(region: config.awsRegion, profile: config.awsProfile, bedrockAPIKey: config.bedrockAPIKey)
     app.bedrockService = bedrock
 
-    app.logger.info("Starting swift-open-llm-proxy")
+    app.logger.info("Starting xcode-bedrock-bridge")
     app.logger.info("AWS Region: \(config.awsRegion)")
     if config.bedrockAPIKey != nil {
         app.logger.info("Bedrock auth: API key (Bearer token)")

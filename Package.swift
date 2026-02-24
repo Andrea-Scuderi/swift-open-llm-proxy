@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "swift-open-llm-proxy",
+    name: "xcode-bedrock-bridge",
     platforms: [
         .macOS(.v15)
     ],

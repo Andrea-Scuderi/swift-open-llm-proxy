@@ -1,8 +1,14 @@
-# swift-open-llm-proxy
+# xcode-bedrock-bridge
 
-> **Work in Progress** — This project is under active development. APIs, configuration, and behaviour may change without notice.
+> 🚧**Work in Progress** — This project is under active development. APIs, configuration, and behaviour may change without notice.
 
-A local Vapor proxy server that connects **Xcode 26.3 AI features** to **Amazon Bedrock** Claude models.
+[ Xcode ] <───(Swift)───> [ Bedrock Bridge ] <───(IAM/HTTPS/API-Key)───> [ Amazon Bedrock ]
+   |                             |                                               |
+ Local Dev                Security & Proxy                                   Cloud LLMs
+
+Xcode Bedrock Bridge is a lightweight, high-performance proxy designed to connect your Apple development environment directly to Large Language Models on AWS.
+
+By acting as a secure intermediary, it allows developers to leverage the power of Amazon Bedrock (including Claude 3.5, Amazon Nova, and Llama 3) without exposing sensitive AWS credentials within the client application.
 
 Xcode speaks OpenAI and Anthropic API formats; Bedrock uses its own Converse API with AWS SigV4 auth. This proxy handles the translation transparently so you can use any Claude model on Bedrock as a backend for both Xcode Intelligence (code completions) and the Xcode Coding Agent (agentic coding).
 
@@ -13,7 +19,7 @@ Xcode speaks OpenAI and Anthropic API formats; Bedrock uses its own Converse API
 ```
 Xcode Intelligence          ──► POST /v1/chat/completions     ─┐
 (code completion, chat)         GET  /v1/models                │
-                                                               │  swift-open-llm-proxy
+                                                               │  xcode-bedrock-bridge
 Xcode Coding Agent          ──► POST /v1/messages             ─┤  (Vapor + Soto)
 (file read/write/run tools)     POST /v1/messages/count_tokens │
                                                                │
@@ -45,8 +51,8 @@ Both Xcode integration modes are covered:
 ### 1. Clone and build
 
 ```bash
-git clone https://github.com/yourname/swift-open-llm-proxy
-cd swift-open-llm-proxy
+git clone https://github.com/yourname/xcode-bedrock-bridge
+cd xcode-bedrock-bridge
 swift build -c release
 ```
 

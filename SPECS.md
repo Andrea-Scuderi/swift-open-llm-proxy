@@ -1,4 +1,4 @@
-# swift-open-llm-proxy — Technical Specification
+# xcode-bedrock-bridge — Technical Specification
 
 Vapor HTTP proxy that bridges **Xcode 26.3 AI features** to **Amazon Bedrock** (Claude models).
 Last updated: February 2026.
@@ -38,7 +38,7 @@ Last updated: February 2026.
             │                             │
             ▼                             ▼
 ┌───────────────────────────────────────────────────────┐
-│              swift-open-llm-proxy (Vapor)             │
+│              xcode-bedrock-bridge (Vapor)             │
 │                                                       │
 │  APIKeyMiddleware   ·   ModelMapper                   │
 │                                                       │
