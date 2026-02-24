@@ -110,66 +110,70 @@ struct ChatController: RouteCollection {
         let model = chatRequest.model
         let encoder = JSONEncoder()
         let translator = responseTranslator
+        let logger = req.logger
 
         let response = Response(status: .ok)
         response.headers.replaceOrAdd(name: .contentType, value: "text/event-stream")
         response.headers.replaceOrAdd(name: .cacheControl, value: "no-cache")
         response.headers.replaceOrAdd(name: "X-Accel-Buffering", value: "no")
 
-        response.body = .init(stream: { writer in
-            Task {
-                func send(_ chunk: some Encodable) {
-                    guard let data = try? encoder.encode(chunk),
-                          let jsonStr = String(data: data, encoding: .utf8) else { return }
-                    writer.write(.buffer(ByteBuffer(string: "data: \(jsonStr)\n\n")))
+        response.body = .init(asyncStream: { writer in
+            func send(_ chunk: some Encodable) async throws {
+                guard let data = try? encoder.encode(chunk),
+                      let jsonStr = String(data: data, encoding: .utf8) else { return }
+                let sseStr = "data: \(jsonStr)\n\n"
+                logger.debug("Streaming SSE: \(sseStr)")
+                try await writer.writeBuffer(ByteBuffer(string: sseStr))
+            }
+
+            do {
+                // Initial role chunk
+                let roleChunk = ChatCompletionChunk(
+                    id: completionID,
+                    object: "chat.completion.chunk",
+                    created: Int(Date().timeIntervalSince1970),
+                    model: model,
+                    choices: [ChunkChoice(
+                        index: 0,
+                        delta: ChunkDelta(role: "assistant", content: nil),
+                        finishReason: nil
+                    )]
+                )
+                try await send(roleChunk)
+
+                for try await text in textStream {
+                    let chunk = translator.streamChunk(
+                        text: text,
+                        model: model,
+                        completionID: completionID
+                    )
+                    try await send(chunk)
                 }
 
-                do {
-                    // Initial role chunk
-                    let roleChunk = ChatCompletionChunk(
-                        id: completionID,
-                        object: "chat.completion.chunk",
-                        created: Int(Date().timeIntervalSince1970),
-                        model: model,
-                        choices: [ChunkChoice(
-                            index: 0,
-                            delta: ChunkDelta(role: "assistant", content: nil),
-                            finishReason: nil
-                        )]
-                    )
-                    send(roleChunk)
+                // Stop chunk
+                let stopChunk = translator.stopChunk(
+                    model: model,
+                    completionID: completionID,
+                    stopReason: nil
+                )
+                try await send(stopChunk)
 
-                    for try await text in textStream {
-                        let chunk = translator.streamChunk(
-                            text: text,
-                            model: model,
-                            completionID: completionID
-                        )
-                        send(chunk)
-                    }
-
-                    // Stop chunk
-                    let stopChunk = translator.stopChunk(
-                        model: model,
-                        completionID: completionID,
-                        stopReason: nil
-                    )
-                    send(stopChunk)
-
-                    writer.write(.buffer(ByteBuffer(string: "data: [DONE]\n\n")))
-                    writer.write(.end)
-                } catch {
-                    // Use String(describing:) so Soto errors report their real
-                    // error code + message instead of the opaque NSError bridge.
-                    let errorMsg = String(describing: error)
-                        .replacingOccurrences(of: "\\", with: "\\\\")
-                        .replacingOccurrences(of: "\"", with: "\\\"")
-                        .replacingOccurrences(of: "\n", with: " ")
-                    writer.write(.buffer(ByteBuffer(
-                        string: "event: error\ndata: {\"error\":\"\(errorMsg)\"}\n\n"
-                    )))
-                    writer.write(.end)
-                }
+                logger.debug("Streaming [DONE]")
+                try await writer.writeBuffer(ByteBuffer(string: "data: [DONE]\n\n"))
+                try await writer.write(.end)
+            } catch {
+                // Use String(describing:) so Soto errors report their real
+                // error code + message instead of the opaque NSError bridge.
+                let errorMsg = String(describing: error)
+                    .replacingOccurrences(of: "\\", with: "\\\\")
+                    .replacingOccurrences(of: "\"", with: "\\\"")
+                    .replacingOccurrences(of: "\n", with: "\\n")
+                    .replacingOccurrences(of: "\r", with: "\\r")
+                    .replacingOccurrences(of: "\t", with: "\\t")
+                let errorSSE = "event: error\ndata: {\"error\":\"\(errorMsg)\"}\n\n"
+                logger.debug("Streaming error: \(errorMsg)")
+                try await writer.writeBuffer(ByteBuffer(string: errorSSE))
+                try await writer.write(.end)
             }
         })
 

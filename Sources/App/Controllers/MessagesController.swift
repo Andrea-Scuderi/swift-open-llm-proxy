@@ -3,7 +3,7 @@ import Foundation
 import SotoBedrockRuntime
 
 struct MessagesController: RouteCollection {
-    let bedrockService: BedrockService
+    let bedrockService: any BedrockConversable
     let modelMapper: ModelMapper
     let requestTranslator: AnthropicRequestTranslator
     let responseTranslator: AnthropicResponseTranslator
@@ -112,48 +112,57 @@ struct MessagesController: RouteCollection {
 
         let model = request.model
         let translator = responseTranslator
+        let logger = req.logger
 
         let response = Response(status: .ok)
         response.headers.replaceOrAdd(name: .contentType, value: "text/event-stream")
         response.headers.replaceOrAdd(name: .cacheControl, value: "no-cache")
         response.headers.replaceOrAdd(name: "X-Accel-Buffering", value: "no")
 
-        response.body = .init(stream: { writer in
-            Task {
-                writer.write(.buffer(ByteBuffer(string: translator.messageStartSSE(messageID: messageID, model: model))))
-                writer.write(.buffer(ByteBuffer(string: translator.pingSSE())))
+        response.body = .init(asyncStream: { writer in
+            let messageStartSSE = translator.messageStartSSE(messageID: messageID, model: model)
+            logger.debug("Streaming messageStart")
+            try await writer.writeBuffer(ByteBuffer(string: messageStartSSE))
 
-                var stopReason = "end_turn"
-                var outputTokens = 0
+            let pingSSE = translator.pingSSE()
+            logger.debug("Streaming ping")
+            try await writer.writeBuffer(ByteBuffer(string: pingSSE))
 
-                do {
-                    for try await event in rawStream {
-                        switch event {
-                        case .messageStop(let e):
-                            stopReason = translator.translateStopReason(e.stopReason)
-                        case .metadata(let e):
-                            outputTokens = e.usage.outputTokens
-                        default:
-                            for sseStr in translator.translateStreamEvent(event) where !sseStr.isEmpty {
-                                writer.write(.buffer(ByteBuffer(string: sseStr)))
-                            }
+            var stopReason = "end_turn"
+            var outputTokens = 0
+
+            do {
+                for try await event in rawStream {
+                    switch event {
+                    case .messageStop(let e):
+                        stopReason = translator.translateStopReason(e.stopReason)
+                    case .metadata(let e):
+                        outputTokens = e.usage.outputTokens
+                    default:
+                        for sseStr in translator.translateStreamEvent(event) where !sseStr.isEmpty {
+                            logger.debug("Streaming SSE: \(sseStr)")
+                            try await writer.writeBuffer(ByteBuffer(string: sseStr))
                         }
                     }
-                } catch {
-                    let msg = String(describing: error)
-                        .replacingOccurrences(of: "\\", with: "\\\\")
-                        .replacingOccurrences(of: "\"", with: "\\\"")
-                        .replacingOccurrences(of: "\n", with: " ")
-                    writer.write(.buffer(ByteBuffer(string:
-                        "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"\(msg)\"}}\n\n"
-                    )))
-                    writer.write(.end)
-                    return
                 }
-
-                writer.write(.buffer(ByteBuffer(string: translator.finalSSE(stopReason: stopReason, outputTokens: outputTokens))))
-                writer.write(.end)
+            } catch {
+                let msg = String(describing: error)
+                    .replacingOccurrences(of: "\\", with: "\\\\")
+                    .replacingOccurrences(of: "\"", with: "\\\"")
+                    .replacingOccurrences(of: "\n", with: "\\n")
+                    .replacingOccurrences(of: "\r", with: "\\r")
+                    .replacingOccurrences(of: "\t", with: "\\t")
+                let errorSSE = "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"\(msg)\"}}\n\n"
+                logger.debug("Streaming error: \(msg)")
+                try await writer.writeBuffer(ByteBuffer(string: errorSSE))
+                try await writer.write(.end)
+                return
             }
+
+            let finalSSE = translator.finalSSE(stopReason: stopReason, outputTokens: outputTokens)
+            logger.debug("Streaming finalSSE stopReason=\(stopReason) outputTokens=\(outputTokens)")
+            try await writer.writeBuffer(ByteBuffer(string: finalSSE))
+            try await writer.write(.end)
         })
 
         return response

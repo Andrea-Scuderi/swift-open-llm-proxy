@@ -150,6 +150,30 @@ actor BedrockService {
 
 extension BedrockService: FoundationModelListable {}
 
+// MARK: - BedrockConversable
+
+protocol BedrockConversable: Sendable {
+    func converse(
+        modelID: String,
+        system: [BedrockRuntime.SystemContentBlock],
+        messages: [BedrockRuntime.Message],
+        inferenceConfig: BedrockRuntime.InferenceConfiguration,
+        toolConfig: BedrockRuntime.ToolConfiguration?
+    ) async throws -> BedrockRuntime.ConverseResponse
+
+    func converseStreamRaw(
+        modelID: String,
+        system: [BedrockRuntime.SystemContentBlock],
+        messages: [BedrockRuntime.Message],
+        inferenceConfig: BedrockRuntime.InferenceConfiguration,
+        toolConfig: BedrockRuntime.ToolConfiguration?
+    ) async throws -> AsyncThrowingStream<BedrockRuntime.ConverseStreamOutput, Error>
+}
+
+// MARK: - BedrockConversable Conformance
+
+extension BedrockService: BedrockConversable {}
+
 // MARK: - Error Mapping
 
 extension BedrockService {
