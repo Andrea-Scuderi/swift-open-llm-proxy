@@ -2,9 +2,11 @@
 
 > 🚧**Work in Progress** — This project is under active development. APIs, configuration, and behaviour may change without notice.
 
+```
 [ Xcode ] <───(Swift)───> [ Bedrock Bridge ] <───(IAM/HTTPS/API-Key)───> [ Amazon Bedrock ]
    |                             |                                               |
  Local Dev                Security & Proxy                                   Cloud LLMs
+```
 
 Xcode Bedrock Bridge is a lightweight, high-performance proxy designed to connect your Apple development environment directly to Large Language Models on AWS.
 
