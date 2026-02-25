@@ -3,10 +3,19 @@ import SotoCore
 import SotoBedrockRuntime
 import SotoBedrock
 
+// MARK: - FoundationModelInfo
+
+struct FoundationModelInfo: Sendable {
+    let modelId: String
+    let modelName: String?
+    let providerName: String?
+    let isActive: Bool
+}
+
 // MARK: - Protocol
 
 protocol FoundationModelListable: Sendable {
-    func listFoundationModels() async throws -> [String]
+    func listFoundationModels() async throws -> [FoundationModelInfo]
 }
 
 // MARK: - Actor
@@ -139,10 +148,20 @@ actor BedrockService {
 
     // MARK: - Foundation Models
 
-    func listFoundationModels() async throws -> [String] {
-        let input = Bedrock.ListFoundationModelsRequest()
+    func listFoundationModels() async throws -> [FoundationModelInfo] {
+        let input = Bedrock.ListFoundationModelsRequest(
+            byInferenceType: .onDemand,
+            byOutputModality: .text
+        )
         let response = try await bedrock.listFoundationModels(input)
-        return (response.modelSummaries ?? []).map(\.modelId)
+        return (response.modelSummaries ?? []).map { summary in
+            FoundationModelInfo(
+                modelId: summary.modelId,
+                modelName: summary.modelName,
+                providerName: summary.providerName,
+                isActive: summary.modelLifecycle?.status == .active
+            )
+        }
     }
 }
 

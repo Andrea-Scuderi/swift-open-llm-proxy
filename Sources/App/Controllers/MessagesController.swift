@@ -23,6 +23,7 @@ struct MessagesController: RouteCollection {
 
         let request = try req.content.decode(AnthropicRequest.self)
         let modelID = modelMapper.bedrockModelID(for: request.model)
+        req.logger.debug("bedrockModelID: \(request.model) → \(modelID)")
         let messageID = "msg_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
 
         let (system, msgs, inferenceConfig, toolConfig) = requestTranslator.translate(request: request)

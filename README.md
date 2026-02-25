@@ -10,7 +10,7 @@
 
 Xcode Bedrock Bridge is a lightweight, high-performance proxy designed to connect your Apple development environment directly to Large Language Models on AWS.
 
-By acting as a secure intermediary, it allows developers to leverage the power of Amazon Bedrock (including Claude 3.5, Amazon Nova, and Llama 3) without exposing sensitive AWS credentials within the client application.
+By acting as a secure intermediary, it allows developers to leverage the power of Amazon Bedrock (including Claude, Amazon Nova, Llama, Mistral, and many more) without exposing sensitive AWS credentials within the client application.
 
 Xcode speaks OpenAI and Anthropic API formats; Bedrock uses its own Converse API with AWS SigV4 auth. This proxy handles the translation transparently so you can use any Claude model on Bedrock as a backend for both Xcode Intelligence (code completions) and the Xcode Coding Agent (agentic coding).
 
@@ -85,7 +85,7 @@ The IAM user/role needs these permissions:
 }
 ```
 
-> `bedrock:ListFoundationModels` is only needed for the live model list on `GET /v1/models`. If it is missing the endpoint falls back to the built-in static list automatically.
+> `bedrock:ListFoundationModels` is only needed for the live model list on `GET /v1/models`. If it is missing the endpoint falls back to the built-in fallback list automatically.
 
 ### 3. Run
 
@@ -137,7 +137,7 @@ curl -N -X POST http://localhost:8080/v1/chat/completions \
    - **Base URL:** `http://localhost:8080` *(do not add `/v1` — Xcode appends it)*
    - **API Key:** value of `PROXY_API_KEY` (or leave blank if auth is disabled)
    - **API Key Header:** `x-api-key`
-4. Select a model from the list (e.g. `us.anthropic.claude-sonnet-4-5-20250929-v1:0` or `us.amazon.nova-pro-v1:0`)
+4. Select a model from the list (e.g. `Claude Sonnet 4.5` or `Nova Pro`)
 
 ### Xcode Coding Agent
 
@@ -167,36 +167,25 @@ defaults write com.apple.dt.Xcode IDEChatClaudeAgentAPIKeyOverride ' '
 
 ## Available models
 
-When the proxy is running with real AWS credentials, `GET /v1/models` returns a **live list** of all foundation models available in the configured region (fetched from the Bedrock management API). When using a Bedrock API key or when the management API call fails, it falls back to the built-in static list below.
+`GET /v1/models` returns human-readable **model names** as the `id` field — this is what Xcode displays in the model picker and sends back in subsequent requests. The proxy resolves each name to the correct Bedrock inference profile ID automatically.
 
-All static fallback IDs use cross-region inference profiles (`us.` prefix) for on-demand throughput.
+**With real AWS credentials**, the list is fetched live from `Bedrock.listFoundationModels()` and reflects every active model in the configured region (49 models as of February 2026, spanning Anthropic Claude, Amazon Nova, Meta Llama, Mistral, Qwen, NVIDIA, DeepSeek, Google, and more).
 
-### Anthropic Claude
+**Without real credentials** (Bedrock API key, API failure, or no service configured), the proxy falls back to a built-in list of well-known models. A selection from the fallback:
 
-| Model | ID |
+| Xcode model name | Bedrock inference profile |
 |---|---|
-| Claude Sonnet 4.6 | `us.anthropic.claude-sonnet-4-6` |
 | Claude Sonnet 4.5 | `us.anthropic.claude-sonnet-4-5-20250929-v1:0` |
-| Claude Sonnet 4 | `us.anthropic.claude-sonnet-4-20250514-v1:0` |
-| Claude Haiku 4.5 | `us.anthropic.claude-haiku-4-5-20251001-v1:0` |
-| Claude Opus 4.6 | `us.anthropic.claude-opus-4-6-v1` |
-| Claude Opus 4.5 | `us.anthropic.claude-opus-4-5-20251101-v1:0` |
-| Claude Opus 4.1 | `us.anthropic.claude-opus-4-1-20250805-v1:0` |
 | Claude 3.7 Sonnet | `us.anthropic.claude-3-7-sonnet-20250219-v1:0` |
 | Claude 3.5 Sonnet v2 | `us.anthropic.claude-3-5-sonnet-20241022-v2:0` |
-| Claude 3.5 Haiku | `us.anthropic.claude-3-5-haiku-20241022-v1:0` |
-| Claude 3 Opus | `us.anthropic.claude-3-opus-20240229-v1:0` |
 | Claude 3 Haiku | `us.anthropic.claude-3-haiku-20240307-v1:0` |
+| Nova Pro | `us.amazon.nova-pro-v1:0` |
+| Nova Lite | `us.amazon.nova-lite-v1:0` |
+| Nova Micro | `us.amazon.nova-micro-v1:0` |
+| Llama 3.3 70B Instruct | `us.meta.llama3-3-70b-instruct-v1:0` |
+| Mistral Large 3 | `mistral.mistral-large-3-675b-instruct` |
 
-### Amazon Nova
-
-| Model | ID |
-|---|---|
-| Amazon Nova Pro | `us.amazon.nova-pro-v1:0` |
-| Amazon Nova Lite | `us.amazon.nova-lite-v1:0` |
-| Amazon Nova Micro | `us.amazon.nova-micro-v1:0` |
-
-You can also use short aliases (`claude-sonnet-4-5`, `nova-pro`, `gpt-4`, `gpt-3.5-turbo`, etc.) — see [SPECS.md](SPECS.md) for the full mapping table.
+You can also send short aliases directly (`claude-sonnet-4-5`, `nova-pro`, `gpt-4`, etc.) in API requests — see [SPECS.md](SPECS.md) for the full alias and name-mapping tables.
 
 > **Enable model access first.** Go to the [AWS Bedrock console](https://console.aws.amazon.com/bedrock/) → **Model access** and request access for each model you want to use. Without this step requests will fail with a `ResourceNotFoundException`.
 

@@ -48,13 +48,14 @@ POST /v1/messages          ──►  MessagesController
                                      ├── BedrockService (actor)
                                      └── AnthropicResponseTranslator (Bedrock → Anthropic SSE)
 
-GET /v1/models             ──►  ModelsController (live via listFoundationModels; static fallback)
+GET /v1/models             ──►  ModelsController (live via listFoundationModels; fallback from modelNameToBedrockID)
 ```
 
 **Key design decisions:**
-- `BedrockService` is a Swift actor for thread-safe AWS client operations. It exposes four methods: `converse()` (non-streaming), `converseStream()` (for OpenAI SSE), `converseStreamRaw()` (for Anthropic SSE, preserving raw Bedrock events), and `listFoundationModels()` (management API, returns all provider model IDs).
+- `BedrockService` is a Swift actor for thread-safe AWS client operations. It exposes four methods: `converse()` (non-streaming), `converseStream()` (for OpenAI SSE), `converseStreamRaw()` (for Anthropic SSE, preserving raw Bedrock events), and `listFoundationModels()` (management API, returns `[FoundationModelInfo]`).
 - `BedrockService` holds both a `BedrockRuntime` client (inference, `SotoBedrockRuntime`) and a `Bedrock` client (management, `SotoBedrock`), sharing the same underlying `AWSClient`.
-- `ModelsController` fetches the live model list from `listFoundationModels` when real AWS credentials are present, deriving `owned_by` from the model ID prefix (`anthropic.` → `"anthropic"`, `amazon.` → `"amazon"`, etc.). It falls back to a hardcoded static list when using a Bedrock API key, when no `BedrockService` is initialised (tests), or when the API call fails. The `FoundationModelListable` protocol enables mock injection in tests.
+- `ModelsController` fetches the live model list from `listFoundationModels` when real AWS credentials are present, using `modelName` as the `id` field and `providerName` as `owned_by` (falling back to prefix derivation when absent). It falls back to `fallbackModelList()` — derived from `ModelMapper.modelNameToBedrockID` — when using a Bedrock API key, when no `BedrockService` is initialised (tests), or when the API call fails. The `FoundationModelListable` protocol enables mock injection in tests.
+- `ModelMapper` resolves model strings in three tiers: (1) native Bedrock ID passthrough via provider prefix, (2) short alias via `mapping`, (3) human-readable name via `modelNameToBedrockID`. This supports the round-trip: `GET /v1/models` returns a name → Xcode sends the name back → `ModelMapper` resolves it to the correct Bedrock inference profile ID.
 - `BedrockConversable` protocol (in `BedrockService.swift`) exposes `converse()` and `converseStreamRaw()` — the two inference methods used by `MessagesController`. `MessagesController` stores `any BedrockConversable`, enabling mock injection in tests. `BedrockService` conforms to both `FoundationModelListable` and `BedrockConversable`.
 - The Anthropic `/v1/messages` routes bypass `APIKeyMiddleware` because Xcode Coding Agent manages its own authentication.
 - Bedrock requires strict user/assistant turn alternation — `RequestTranslator` handles merging/reordering as needed.

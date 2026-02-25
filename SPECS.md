@@ -118,16 +118,18 @@ defaults write com.apple.dt.Xcode IDEChatClaudeAgentAPIKeyOverride ' '
 
 Returns the list of available models in OpenAI format.
 
-**Dynamic vs. static behaviour:**
+**Dynamic vs. fallback behaviour:**
 
 | Condition | Behaviour |
 |---|---|
-| Real AWS credentials (default/profile) | Calls `Bedrock.listFoundationModels()` — returns all models available in the region |
-| Bedrock API key (`BEDROCK_API_KEY`) | Management API not supported with Bearer auth → static fallback |
-| Network/auth error from management API | Warning logged, static fallback returned |
-| No `BedrockService` (unit tests) | Static fallback immediately |
+| Real AWS credentials (default/profile) | Calls `Bedrock.listFoundationModels()` — returns all active models in the region |
+| Bedrock API key (`BEDROCK_API_KEY`) | Management API not supported with Bearer auth → fallback list |
+| Network/auth error from management API | Warning logged, fallback list returned |
+| No `BedrockService` (unit tests) | Fallback list immediately |
 
-`owned_by` is derived from the model ID prefix: `anthropic.*` / `us.anthropic.*` → `"anthropic"`, `amazon.*` / `us.amazon.*` → `"amazon"`, etc.
+The `id` field contains the Bedrock `modelName` (e.g. `"Claude 3 Haiku"`, `"Nova Pro"`) from the live API, or the human-readable key from the built-in fallback map. This is what Xcode displays in the model picker and sends back in requests; `ModelMapper` resolves it to the correct Bedrock inference profile ID.
+
+`owned_by` is the Bedrock `providerName` from the live API, lowercased (e.g. `"anthropic"`, `"amazon"`, `"meta"`), or derived from the model ID prefix when `providerName` is absent: `anthropic.*` / `us.anthropic.*` → `"anthropic"`, `amazon.*` / `us.amazon.*` → `"amazon"`, etc.
 
 **Response:**
 ```json
@@ -135,13 +137,13 @@ Returns the list of available models in OpenAI format.
   "object": "list",
   "data": [
     {
-      "id": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      "id": "Claude 3 Haiku",
       "object": "model",
       "created": 1234567890,
       "owned_by": "anthropic"
     },
     {
-      "id": "us.amazon.nova-pro-v1:0",
+      "id": "Nova Pro",
       "object": "model",
       "created": 1234567890,
       "owned_by": "amazon"
@@ -443,15 +445,26 @@ Both share a single `AWSClient` instance inside `BedrockService`.
 
 ## 6. Model IDs & Mapping
 
-The proxy supports both **Anthropic Claude** and **Amazon Nova** models. All static fallback IDs use **cross-region inference profiles** (`us.` prefix) for on-demand throughput without provisioning. Bare `anthropic.*` IDs for older models (Claude 3 Opus, Claude 3 Sonnet) no longer support on-demand throughput.
+### Resolution order
 
-### Static Fallback Models (February 2026)
+`ModelMapper.bedrockModelID(for:)` resolves a model string in three tiers:
 
-When the live `listFoundationModels` call is unavailable, the following models are returned.
+| Priority | Input form | Example | Mechanism |
+|---|---|---|---|
+| 1 | Native Bedrock ID | `us.anthropic.claude-3-5-sonnet-20241022-v2:0` | Provider prefix passthrough (`anthropic.`, `amazon.`, `meta.`, etc.) |
+| 2 | Short alias | `claude-3-5-sonnet`, `nova-pro`, `gpt-4` | `mapping` dict |
+| 3 | Human-readable name | `Claude 3.5 Sonnet v2`, `Nova Pro` | `modelNameToBedrockID` dict |
+| 4 | Unknown | anything else | `DEFAULT_BEDROCK_MODEL` |
+
+Tier 3 exists specifically for the round-trip from `GET /v1/models` → Xcode model picker → `POST /v1/chat/completions`: the proxy returns model names from the live API (or fallback), Xcode sends that name back as the `model` field, and `ModelMapper` resolves it to the correct Bedrock ID.
+
+### Fallback model list (February 2026)
+
+When the live `listFoundationModels` call is unavailable, a built-in list is returned. The `id` field is the human-readable name (same as the live API would return); the right column shows the Bedrock ID used for inference.
 
 #### Anthropic Claude
 
-| Display Name | Inference Profile ID |
+| id (Xcode model name) | Bedrock inference profile |
 |---|---|
 | Claude Sonnet 4.6 | `us.anthropic.claude-sonnet-4-6` |
 | Claude Sonnet 4.5 | `us.anthropic.claude-sonnet-4-5-20250929-v1:0` |
@@ -468,19 +481,23 @@ When the live `listFoundationModels` call is unavailable, the following models a
 | Claude 3 Sonnet | `us.anthropic.claude-3-sonnet-20240229-v1:0` |
 | Claude 3 Haiku | `us.anthropic.claude-3-haiku-20240307-v1:0` |
 
-#### Amazon Nova
+#### Amazon Nova (names confirmed from listFoundationModels)
 
-| Display Name | Inference Profile ID |
+| id (Xcode model name) | Bedrock inference profile |
 |---|---|
-| Amazon Nova Pro | `us.amazon.nova-pro-v1:0` |
-| Amazon Nova Lite | `us.amazon.nova-lite-v1:0` |
-| Amazon Nova Micro | `us.amazon.nova-micro-v1:0` |
+| Nova Pro | `us.amazon.nova-pro-v1:0` |
+| Nova Lite | `us.amazon.nova-lite-v1:0` |
+| Nova Micro | `us.amazon.nova-micro-v1:0` |
 
-> **Note:** `us.` inference profiles are for `us-east-1` / `us-west-2`. For EU or AP regions, use the `eu.` or `ap.` prefix respectively.
+> **Note:** `us.` inference profiles cover `us-east-1` / `us-west-2`. For EU or AP regions use the `eu.` or `ap.` prefix.
 
-### Alias Mapping
+The full fallback list (80+ entries covering Mistral, Meta Llama, Qwen, NVIDIA, DeepSeek, Cohere, AI21, Google, and more) is defined in `ModelMapper.modelNameToBedrockID` in `Sources/App/Services/Configuration.swift`.
 
-| Alias (sent by client) | Bedrock Inference Profile ID |
+### Short alias mapping
+
+These aliases are resolved at tier 2 and are never exposed in `GET /v1/models`. They allow developers and Xcode's OpenAI compat path to send short names directly.
+
+| Alias (sent by client) | Bedrock inference profile ID |
 |---|---|
 | `gpt-4`, `gpt-4o`, `gpt-4-turbo` | `us.anthropic.claude-sonnet-4-5-20250929-v1:0` |
 | `gpt-3.5-turbo` | `us.anthropic.claude-haiku-4-5-20251001-v1:0` |
@@ -500,7 +517,7 @@ When the live `listFoundationModels` call is unavailable, the following models a
 | `nova-pro` | `us.amazon.nova-pro-v1:0` |
 | `nova-lite` | `us.amazon.nova-lite-v1:0` |
 | `nova-micro` | `us.amazon.nova-micro-v1:0` |
-| IDs containing `anthropic.` or `amazon.` | passed through as-is |
+| IDs containing a provider prefix (`anthropic.`, `amazon.`, `meta.`, …) | passed through as-is |
 
 ---
 

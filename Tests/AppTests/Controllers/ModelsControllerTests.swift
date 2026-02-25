@@ -6,20 +6,29 @@ import VaporTesting
 
 private struct MockFoundationModelListable: FoundationModelListable {
     enum Behavior {
-        case success([String])
+        case success([FoundationModelInfo])
         case empty
         case failure(Error)
     }
 
     let behavior: Behavior
 
-    func listFoundationModels() async throws -> [String] {
+    func listFoundationModels() async throws -> [FoundationModelInfo] {
         switch behavior {
-        case .success(let ids): return ids
+        case .success(let models): return models
         case .empty: return []
         case .failure(let error): throw error
         }
     }
+}
+
+private func makeInfo(
+    modelId: String,
+    modelName: String? = nil,
+    providerName: String? = nil,
+    isActive: Bool = true
+) -> FoundationModelInfo {
+    FoundationModelInfo(modelId: modelId, modelName: modelName, providerName: providerName, isActive: isActive)
 }
 
 private struct MockListError: Error {}
@@ -89,8 +98,8 @@ struct ModelsControllerTests {
         }
     }
 
-    @Test("response contains expected Anthropic model IDs")
-    func responseContainsExpectedAnthropicModelIDs() async throws {
+    @Test("response contains expected Anthropic model names")
+    func responseContainsExpectedAnthropicModelNames() async throws {
         let app = try await Application.make(.testing)
         defer { Task { try await app.asyncShutdown() } }
         try app.register(collection: ModelsController())
@@ -98,14 +107,14 @@ struct ModelsControllerTests {
         try await app.test(.GET, "/v1/models") { res async in
             if let body = try? res.content.decode(ModelListResponse.self) {
                 let ids = body.data.map(\.id)
-                #expect(ids.contains("us.anthropic.claude-3-5-sonnet-20241022-v2:0"))
-                #expect(ids.contains("us.anthropic.claude-3-haiku-20240307-v1:0"))
+                #expect(ids.contains("Claude 3.5 Sonnet v2"))
+                #expect(ids.contains("Claude 3 Haiku"))
             }
         }
     }
 
-    @Test("response contains expected Amazon Nova model IDs")
-    func responseContainsExpectedAmazonModelIDs() async throws {
+    @Test("response contains expected Amazon Nova model names")
+    func responseContainsExpectedAmazonModelNames() async throws {
         let app = try await Application.make(.testing)
         defer { Task { try await app.asyncShutdown() } }
         try app.register(collection: ModelsController())
@@ -113,9 +122,9 @@ struct ModelsControllerTests {
         try await app.test(.GET, "/v1/models") { res async in
             if let body = try? res.content.decode(ModelListResponse.self) {
                 let ids = body.data.map(\.id)
-                #expect(ids.contains("us.amazon.nova-pro-v1:0"))
-                #expect(ids.contains("us.amazon.nova-lite-v1:0"))
-                #expect(ids.contains("us.amazon.nova-micro-v1:0"))
+                #expect(ids.contains("Nova Pro"))
+                #expect(ids.contains("Nova Lite"))
+                #expect(ids.contains("Nova Micro"))
             }
         }
     }
@@ -128,9 +137,8 @@ struct ModelsControllerTests {
 
         try await app.test(.GET, "/v1/models") { res async in
             if let body = try? res.content.decode(ModelListResponse.self) {
-                let anthropicModels = body.data.filter { $0.id.contains("anthropic") }
+                let anthropicModels = body.data.filter { $0.ownedBy == "anthropic" }
                 #expect(!anthropicModels.isEmpty)
-                #expect(anthropicModels.allSatisfy { $0.ownedBy == "anthropic" })
             }
         }
     }
@@ -143,9 +151,8 @@ struct ModelsControllerTests {
 
         try await app.test(.GET, "/v1/models") { res async in
             if let body = try? res.content.decode(ModelListResponse.self) {
-                let amazonModels = body.data.filter { $0.id.contains("amazon") }
+                let amazonModels = body.data.filter { $0.ownedBy == "amazon" }
                 #expect(!amazonModels.isEmpty)
-                #expect(amazonModels.allSatisfy { $0.ownedBy == "amazon" })
             }
         }
     }
@@ -169,28 +176,47 @@ struct ModelsControllerTests {
 @Suite("ModelsController dynamic list")
 struct ModelsControllerDynamicListTests {
 
-    @Test("returns dynamic model IDs from service")
-    func returnsDynamicListFromService() async throws {
+    @Test("returns modelName as id when provided")
+    func returnsModelNameAsId() async throws {
         let app = try await Application.make(.testing)
         defer { Task { try await app.asyncShutdown() } }
         let mock = MockFoundationModelListable(behavior: .success([
-            "anthropic.claude-3-haiku-20240307-v1:0",
-            "amazon.nova-pro-v1:0",
+            makeInfo(modelId: "anthropic.claude-3-haiku-20240307-v1:0", modelName: "Claude 3 Haiku"),
+            makeInfo(modelId: "amazon.nova-pro-v1:0", modelName: "Amazon Nova Pro"),
         ]))
         try app.register(collection: ModelsController(foundationModelListable: mock))
 
         try await app.test(.GET, "/v1/models") { res async in
             let body = try? res.content.decode(ModelListResponse.self)
             let ids = body?.data.map(\.id) ?? []
-            #expect(ids == ["anthropic.claude-3-haiku-20240307-v1:0", "amazon.nova-pro-v1:0"])
+            #expect(ids.contains("Claude 3 Haiku"))
+            #expect(ids.contains("Amazon Nova Pro"))
         }
     }
 
-    @Test("dynamic Anthropic models have owned_by anthropic")
-    func dynamicAnthropicModelsHaveCorrectOwnedBy() async throws {
+    @Test("falls back to modelId when modelName is nil")
+    func fallsBackToModelIdWhenNameIsNil() async throws {
         let app = try await Application.make(.testing)
         defer { Task { try await app.asyncShutdown() } }
-        let mock = MockFoundationModelListable(behavior: .success(["anthropic.claude-3-haiku-20240307-v1:0"]))
+        let mock = MockFoundationModelListable(behavior: .success([
+            makeInfo(modelId: "anthropic.claude-3-haiku-20240307-v1:0"),
+        ]))
+        try app.register(collection: ModelsController(foundationModelListable: mock))
+
+        try await app.test(.GET, "/v1/models") { res async in
+            let body = try? res.content.decode(ModelListResponse.self)
+            let ids = body?.data.map(\.id) ?? []
+            #expect(ids.contains("anthropic.claude-3-haiku-20240307-v1:0"))
+        }
+    }
+
+    @Test("uses providerName as ownedBy when provided")
+    func usesProviderNameAsOwnedBy() async throws {
+        let app = try await Application.make(.testing)
+        defer { Task { try await app.asyncShutdown() } }
+        let mock = MockFoundationModelListable(behavior: .success([
+            makeInfo(modelId: "anthropic.claude-3-haiku-20240307-v1:0", modelName: "Claude 3 Haiku", providerName: "Anthropic"),
+        ]))
         try app.register(collection: ModelsController(foundationModelListable: mock))
 
         try await app.test(.GET, "/v1/models") { res async in
@@ -200,39 +226,40 @@ struct ModelsControllerDynamicListTests {
         }
     }
 
-    @Test("dynamic Amazon models have owned_by amazon")
-    func dynamicAmazonModelsHaveCorrectOwnedBy() async throws {
+    @Test("falls back to derived ownedBy when providerName is nil")
+    func fallsBackToDerivedOwnedBy() async throws {
         let app = try await Application.make(.testing)
         defer { Task { try await app.asyncShutdown() } }
         let mock = MockFoundationModelListable(behavior: .success([
-            "amazon.nova-pro-v1:0",
-            "us.amazon.nova-lite-v1:0",
-        ]))
-        try app.register(collection: ModelsController(foundationModelListable: mock))
-
-        try await app.test(.GET, "/v1/models") { res async in
-            if let body = try? res.content.decode(ModelListResponse.self) {
-                #expect(body.data.allSatisfy { $0.ownedBy == "amazon" })
-            }
-        }
-    }
-
-    @Test("mixed provider list has correct ownedBy per model")
-    func mixedProviderListHasCorrectOwnedBy() async throws {
-        let app = try await Application.make(.testing)
-        defer { Task { try await app.asyncShutdown() } }
-        let mock = MockFoundationModelListable(behavior: .success([
-            "anthropic.claude-3-haiku-20240307-v1:0",
-            "amazon.nova-pro-v1:0",
+            makeInfo(modelId: "anthropic.claude-3-haiku-20240307-v1:0", modelName: "Claude 3 Haiku"),
+            makeInfo(modelId: "amazon.nova-pro-v1:0", modelName: "Amazon Nova Pro"),
         ]))
         try app.register(collection: ModelsController(foundationModelListable: mock))
 
         try await app.test(.GET, "/v1/models") { res async in
             if let body = try? res.content.decode(ModelListResponse.self) {
                 let byId = Dictionary(uniqueKeysWithValues: body.data.map { ($0.id, $0.ownedBy) })
-                #expect(byId["anthropic.claude-3-haiku-20240307-v1:0"] == "anthropic")
-                #expect(byId["amazon.nova-pro-v1:0"] == "amazon")
+                #expect(byId["Claude 3 Haiku"] == "anthropic")
+                #expect(byId["Amazon Nova Pro"] == "amazon")
             }
+        }
+    }
+
+    @Test("inactive models are excluded from response")
+    func inactiveModelsAreExcluded() async throws {
+        let app = try await Application.make(.testing)
+        defer { Task { try await app.asyncShutdown() } }
+        let mock = MockFoundationModelListable(behavior: .success([
+            makeInfo(modelId: "anthropic.claude-3-haiku-20240307-v1:0", modelName: "Claude 3 Haiku", isActive: true),
+            makeInfo(modelId: "anthropic.old-model-v1:0", modelName: "Old Model", isActive: false),
+        ]))
+        try app.register(collection: ModelsController(foundationModelListable: mock))
+
+        try await app.test(.GET, "/v1/models") { res async in
+            let body = try? res.content.decode(ModelListResponse.self)
+            let ids = body?.data.map(\.id) ?? []
+            #expect(ids.contains("Claude 3 Haiku"))
+            #expect(!ids.contains("Old Model"))
         }
     }
 
@@ -241,8 +268,8 @@ struct ModelsControllerDynamicListTests {
         let app = try await Application.make(.testing)
         defer { Task { try await app.asyncShutdown() } }
         let mock = MockFoundationModelListable(behavior: .success([
-            "anthropic.claude-3-haiku-20240307-v1:0",
-            "amazon.nova-pro-v1:0",
+            makeInfo(modelId: "anthropic.claude-3-haiku-20240307-v1:0", modelName: "Claude 3 Haiku"),
+            makeInfo(modelId: "amazon.nova-pro-v1:0", modelName: "Amazon Nova Pro"),
         ]))
         try app.register(collection: ModelsController(foundationModelListable: mock))
 
@@ -253,8 +280,8 @@ struct ModelsControllerDynamicListTests {
         }
     }
 
-    @Test("falls back to static list when service throws")
-    func fallsBackToStaticListWhenServiceThrows() async throws {
+    @Test("falls back to fallback list when service throws")
+    func fallsBackToFallbackListWhenServiceThrows() async throws {
         let app = try await Application.make(.testing)
         defer { Task { try await app.asyncShutdown() } }
         let mock = MockFoundationModelListable(behavior: .failure(MockListError()))
@@ -263,13 +290,13 @@ struct ModelsControllerDynamicListTests {
         try await app.test(.GET, "/v1/models") { res async in
             let body = try? res.content.decode(ModelListResponse.self)
             let ids = body?.data.map(\.id) ?? []
-            #expect(ids.contains("us.anthropic.claude-3-5-sonnet-20241022-v2:0"))
-            #expect(ids.contains("us.amazon.nova-pro-v1:0"))
+            #expect(ids.contains("Claude 3.5 Sonnet v2"))
+            #expect(ids.contains("Nova Pro"))
         }
     }
 
-    @Test("falls back to static list when service returns empty array")
-    func fallsBackToStaticListWhenServiceReturnsEmpty() async throws {
+    @Test("falls back to fallback list when service returns empty array")
+    func fallsBackToFallbackListWhenServiceReturnsEmpty() async throws {
         let app = try await Application.make(.testing)
         defer { Task { try await app.asyncShutdown() } }
         let mock = MockFoundationModelListable(behavior: .empty)
@@ -278,8 +305,8 @@ struct ModelsControllerDynamicListTests {
         try await app.test(.GET, "/v1/models") { res async in
             let body = try? res.content.decode(ModelListResponse.self)
             let ids = body?.data.map(\.id) ?? []
-            #expect(ids.contains("us.anthropic.claude-3-5-sonnet-20241022-v2:0"))
-            #expect(ids.contains("us.amazon.nova-pro-v1:0"))
+            #expect(ids.contains("Claude 3.5 Sonnet v2"))
+            #expect(ids.contains("Nova Pro"))
         }
     }
 

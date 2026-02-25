@@ -78,4 +78,95 @@ struct ModelMapperTests {
         let nativeID = "us.amazon.nova-pro-v1:0"
         #expect(mapper.bedrockModelID(for: nativeID) == nativeID)
     }
+
+    @Test("deepseek-r1 alias resolves to us.deepseek.r1-v1:0")
+    func deepseekR1AliasResolves() {
+        #expect(mapper.bedrockModelID(for: "deepseek-r1") == "us.deepseek.r1-v1:0")
+    }
+
+    @Test("native us.deepseek model ID passes through unchanged")
+    func passthroughNativeDeepseekID() {
+        let nativeID = "us.deepseek.r1-v1:0"
+        #expect(mapper.bedrockModelID(for: nativeID) == nativeID)
+    }
+
+    @Test("native us.meta model ID passes through unchanged")
+    func passthroughNativeMetaID() {
+        let nativeID = "us.meta.llama3-3-70b-instruct-v1:0"
+        #expect(mapper.bedrockModelID(for: nativeID) == nativeID)
+    }
+
+    @Test("native mistral. model ID passes through unchanged")
+    func passthroughNativeMistralID() {
+        let nativeID = "mistral.mistral-large-2407-v1:0"
+        #expect(mapper.bedrockModelID(for: nativeID) == nativeID)
+    }
+
+    @Test("llama-3-3-70b alias resolves correctly")
+    func llama33Alias() {
+        #expect(mapper.bedrockModelID(for: "llama-3-3-70b") == "us.meta.llama3-3-70b-instruct-v1:0")
+    }
+
+    @Test("mistral-large alias resolves to Bedrock Mistral Large")
+    func mistralLargeAlias() {
+        #expect(mapper.bedrockModelID(for: "mistral-large") == "mistral.mistral-large-2407-v1:0")
+    }
+
+    @Test("command-r-plus alias resolves to Cohere Command R+")
+    func commandRPlusAlias() {
+        #expect(mapper.bedrockModelID(for: "command-r-plus") == "cohere.command-r-plus-v1:0")
+    }
+
+    @Test("jamba-large alias resolves to AI21 Jamba 1.5 Large")
+    func jamba15LargeAlias() {
+        #expect(mapper.bedrockModelID(for: "jamba-large") == "ai21.jamba-1-5-large-v1:0")
+    }
+
+    @Test("llama-4-maverick alias resolves correctly")
+    func llama4MaverickAlias() {
+        #expect(mapper.bedrockModelID(for: "llama-4-maverick") == "us.meta.llama4-maverick-17b-instruct-v1:0")
+    }
+
+    @Test("native cohere. model ID passes through unchanged")
+    func passthroughNativeCohereID() {
+        let nativeID = "cohere.command-r-plus-v1:0"
+        #expect(mapper.bedrockModelID(for: nativeID) == nativeID)
+    }
+
+    // MARK: - Model name resolution (tier 3)
+
+    @Test("model name 'Claude 3.5 Sonnet v2' resolves to Bedrock ID")
+    func claudeSonnetV2NameResolvesToBedrockID() {
+        #expect(mapper.bedrockModelID(for: "Claude 3.5 Sonnet v2") == "us.anthropic.claude-3-5-sonnet-20241022-v2:0")
+    }
+
+    @Test("model name 'Nova Pro' resolves to Bedrock ID")
+    func novaProNameResolvesToBedrockID() {
+        #expect(mapper.bedrockModelID(for: "Nova Pro") == "us.amazon.nova-pro-v1:0")
+    }
+
+    @Test("model name 'DeepSeek-R1' resolves to Bedrock ID")
+    func deepSeekR1NameResolvesToBedrockID() {
+        #expect(mapper.bedrockModelID(for: "DeepSeek-R1") == "us.deepseek.r1-v1:0")
+    }
+
+    @Test("model name 'Llama 3.3 70B Instruct' resolves to Bedrock ID")
+    func llama33NameResolvesToBedrockID() {
+        #expect(mapper.bedrockModelID(for: "Llama 3.3 70B Instruct") == "us.meta.llama3-3-70b-instruct-v1:0")
+    }
+
+    @Test("model name 'Mistral Large (24.02)' resolves to Bedrock ID")
+    func mistralLargeNameResolvesToBedrockID() {
+        #expect(mapper.bedrockModelID(for: "Mistral Large (24.02)") == "mistral.mistral-large-2402-v1:0")
+    }
+
+    @Test("model name 'Command R+' resolves to Bedrock ID")
+    func commandRPlusNameResolvesToBedrockID() {
+        #expect(mapper.bedrockModelID(for: "Command R+") == "cohere.command-r-plus-v1:0")
+    }
+
+    @Test("model name 'Jamba 1.5 Large' resolves to Bedrock ID")
+    func jamba15LargeNameResolvesToBedrockID() {
+        #expect(mapper.bedrockModelID(for: "Jamba 1.5 Large") == "ai21.jamba-1-5-large-v1:0")
+    }
 }
