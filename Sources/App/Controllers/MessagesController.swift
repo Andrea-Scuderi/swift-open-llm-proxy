@@ -26,6 +26,16 @@ struct MessagesController: RouteCollection {
 
     @Sendable
     func messages(req: Request) async throws -> Response {
+        // Pre-validate JSON nesting depth before Codable decoding.
+        // JSONSerialization enforces a ~512-level nesting limit, preventing
+        // stack exhaustion from crafted deeply-nested tool inputSchema payloads.
+        if let bodyData = req.body.data {
+            do {
+                _ = try JSONSerialization.jsonObject(with: bodyData, options: [])
+            } catch {
+                throw Abort(.badRequest, reason: "Invalid or excessively nested JSON.")
+            }
+        }
         let request = try req.content.decode(AnthropicRequest.self)
 
         if let body = req.body.string {
@@ -127,8 +137,9 @@ struct MessagesController: RouteCollection {
             )
             return try await anthropicResponse.encodeResponse(for: req)
         } catch {
+            req.logger.error("Bedrock error: \(error)")
             let status = BedrockService.httpStatus(for: error)
-            throw Abort(status, reason: String(describing: error))
+            throw Abort(status, reason: BedrockService.clientSafeReason(for: error))
         }
     }
 
@@ -152,8 +163,9 @@ struct MessagesController: RouteCollection {
                 inferenceConfig: inferenceConfig, toolConfig: toolConfig
             )
         } catch {
+            req.logger.error("Bedrock error: \(error)")
             let status = BedrockService.httpStatus(for: error)
-            throw Abort(status, reason: String(describing: error))
+            throw Abort(status, reason: BedrockService.clientSafeReason(for: error))
         }
 
         let model = request.model
@@ -196,14 +208,9 @@ struct MessagesController: RouteCollection {
                 logger.debug("Streaming finalSSE stopReason=\(stopReason) outputTokens=\(outputTokens)")
                 try await writer.writeBuffer(ByteBuffer(string: finalSSE))
             } catch {
-                let msg = String(describing: error)
-                    .replacingOccurrences(of: "\\", with: "\\\\")
-                    .replacingOccurrences(of: "\"", with: "\\\"")
-                    .replacingOccurrences(of: "\n", with: "\\n")
-                    .replacingOccurrences(of: "\r", with: "\\r")
-                    .replacingOccurrences(of: "\t", with: "\\t")
-                let errorSSE = "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"\(msg)\"}}\n\n"
-                logger.debug("Streaming error: \(msg)")
+                logger.error("Bedrock streaming error: \(error)")
+                let safeMsg = BedrockService.clientSafeReason(for: error)
+                let errorSSE = "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"\(safeMsg)\"}}\n\n"
                 try? await writer.writeBuffer(ByteBuffer(string: errorSSE))
             }
             try? await writer.write(.end)

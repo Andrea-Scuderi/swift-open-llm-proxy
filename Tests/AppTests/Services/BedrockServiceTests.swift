@@ -25,9 +25,9 @@ struct BedrockServiceErrorMappingTests {
         #expect(BedrockService.httpStatus(for: ValidationError()) == .badRequest)
     }
 
-    @Test("AccessDenied error maps to 401 Unauthorized")
-    func accessDeniedErrorMapsToUnauthorized() {
-        #expect(BedrockService.httpStatus(for: AccessDeniedError()) == .unauthorized)
+    @Test("AccessDenied error maps to 403 Forbidden")
+    func accessDeniedErrorMapsToForbidden() {
+        #expect(BedrockService.httpStatus(for: AccessDeniedError()) == .forbidden)
     }
 
     @Test("ResourceNotFound error maps to 404 Not Found")
@@ -48,5 +48,12 @@ struct BedrockServiceErrorMappingTests {
     @Test("unknown error maps to 500 Internal Server Error")
     func unknownErrorMapsToInternalServerError() {
         #expect(BedrockService.httpStatus(for: UnknownBedrockError()) == .internalServerError)
+    }
+
+    @Test("clientSafeReason returns HTTP status phrase, not internal error detail")
+    func clientSafeReasonReturnsStatusPhrase() {
+        #expect(BedrockService.clientSafeReason(for: ThrottlingError()) == "Too Many Requests")
+        #expect(BedrockService.clientSafeReason(for: AccessDeniedError()) == "Forbidden")
+        #expect(BedrockService.clientSafeReason(for: UnknownBedrockError()) == "Internal Server Error")
     }
 }

@@ -2,6 +2,12 @@ import Vapor
 import Foundation
 import SotoBedrockRuntime
 
+// MARK: - Input guardrail limits
+
+private let maxMessages          = 100
+private let maxModelNameLength   = 128
+private let maxMessageTextLength = 65_536   // chars per content block
+
 struct ChatController: RouteCollection {
     let bedrockService: BedrockService
     let modelMapper: ModelMapper
@@ -19,6 +25,20 @@ struct ChatController: RouteCollection {
         }
 
         let chatRequest = try req.content.decode(ChatCompletionRequest.self)
+
+        guard chatRequest.model.count <= maxModelNameLength else {
+            throw Abort(.badRequest, reason: "Model name too long (max \(maxModelNameLength) chars).")
+        }
+        guard chatRequest.messages.count <= maxMessages else {
+            throw Abort(.badRequest, reason: "Too many messages (max \(maxMessages)).")
+        }
+        for msg in chatRequest.messages {
+            let text = msg.content.textOnly
+            guard text.count <= maxMessageTextLength else {
+                throw Abort(.badRequest, reason: "Message content exceeds maximum allowed length of \(maxMessageTextLength) chars.")
+            }
+        }
+
         let modelID = modelMapper.bedrockModelID(for: chatRequest.model)
         req.logger.debug("bedrockModelID: \(chatRequest.model) → \(modelID)")
         let completionID = "chatcmpl-\(UUID().uuidString)"
@@ -76,8 +96,9 @@ struct ChatController: RouteCollection {
             )
             return try await openAIResponse.encodeResponse(for: req)
         } catch {
+            req.logger.error("Bedrock error: \(error)")
             let status = BedrockService.httpStatus(for: error)
-            throw Abort(status, reason: String(describing: error))
+            throw Abort(status, reason: BedrockService.clientSafeReason(for: error))
         }
     }
 
@@ -104,8 +125,9 @@ struct ChatController: RouteCollection {
                 inferenceConfig: inferenceConfig
             )
         } catch {
+            req.logger.error("Bedrock error: \(error)")
             let status = BedrockService.httpStatus(for: error)
-            throw Abort(status, reason: String(describing: error))
+            throw Abort(status, reason: BedrockService.clientSafeReason(for: error))
         }
 
         let model = chatRequest.model
@@ -163,16 +185,9 @@ struct ChatController: RouteCollection {
                 try await writer.writeBuffer(ByteBuffer(string: "data: [DONE]\n\n"))
                 try await writer.write(.end)
             } catch {
-                // Use String(describing:) so Soto errors report their real
-                // error code + message instead of the opaque NSError bridge.
-                let errorMsg = String(describing: error)
-                    .replacingOccurrences(of: "\\", with: "\\\\")
-                    .replacingOccurrences(of: "\"", with: "\\\"")
-                    .replacingOccurrences(of: "\n", with: "\\n")
-                    .replacingOccurrences(of: "\r", with: "\\r")
-                    .replacingOccurrences(of: "\t", with: "\\t")
-                let errorSSE = "event: error\ndata: {\"error\":\"\(errorMsg)\"}\n\n"
-                logger.debug("Streaming error: \(errorMsg)")
+                logger.error("Bedrock streaming error: \(error)")
+                let safeMsg = BedrockService.clientSafeReason(for: error)
+                let errorSSE = "event: error\ndata: {\"error\":\"\(safeMsg)\"}\n\n"
                 try await writer.writeBuffer(ByteBuffer(string: errorSSE))
                 try await writer.write(.end)
             }

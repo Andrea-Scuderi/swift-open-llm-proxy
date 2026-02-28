@@ -197,18 +197,24 @@ extension BedrockService: BedrockConversable {}
 
 extension BedrockService {
     static func httpStatus(for error: Error) -> HTTPResponseStatus {
-        let description = String(describing: type(of: error))
-        if description.contains("Throttling") || description.contains("throttling") {
+        let typeName = String(describing: type(of: error)).lowercased()
+        if typeName.contains("throttling") {
             return .tooManyRequests
-        } else if description.contains("Validation") || description.contains("validation") {
+        } else if typeName.contains("validation") {
             return .badRequest
-        } else if description.contains("AccessDenied") || description.contains("accessDenied") {
-            return .unauthorized
-        } else if description.contains("ResourceNotFound") || description.contains("ModelNotFound") {
+        } else if typeName.contains("accessdenied") {
+            return .forbidden
+        } else if typeName.contains("resourcenotfound") || typeName.contains("modelnotfound") {
             return .notFound
-        } else if description.contains("ServiceUnavailable") || description.contains("serviceUnavailable") {
+        } else if typeName.contains("serviceunavailable") {
             return .serviceUnavailable
         }
         return .internalServerError
+    }
+
+    /// Returns a client-safe error reason (HTTP status phrase only).
+    /// Full error details are logged server-side; AWS internals are never sent to clients.
+    static func clientSafeReason(for error: Error) -> String {
+        httpStatus(for: error).reasonPhrase
     }
 }

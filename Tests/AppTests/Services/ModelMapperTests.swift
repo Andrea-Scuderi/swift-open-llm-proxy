@@ -58,6 +58,13 @@ struct ModelMapperTests {
         #expect(mapper.bedrockModelID(for: "") == "us.anthropic.claude-sonnet-4-5-20250929-v1:0")
     }
 
+    @Test("embedded provider prefix does not trigger passthrough")
+    func embeddedProviderPrefixFallsToDefault() {
+        // "hack.me.anthropic.test" contains "anthropic." but must NOT pass through —
+        // only strings that *start with* a known prefix are native Bedrock IDs.
+        #expect(mapper.bedrockModelID(for: "hack.me.anthropic.test") == "us.anthropic.claude-sonnet-4-5-20250929-v1:0")
+    }
+
     @Test("nova-pro alias resolves to Amazon Nova Pro")
     func novaProAliasResolvesToAmazonNovaPro() {
         #expect(mapper.bedrockModelID(for: "nova-pro") == "us.amazon.nova-pro-v1:0")

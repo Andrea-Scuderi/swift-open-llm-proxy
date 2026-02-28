@@ -230,6 +230,24 @@ LOG_LEVEL=debug swift run Run
 
 ---
 
+## Security
+
+### Localhost-only binding
+
+The server binds to `127.0.0.1` by default. The Anthropic `/v1/messages` endpoint (used by the Xcode Coding Agent) is unauthenticated — this proxy is designed exclusively for local development and should **never** be exposed to a wider network.
+
+If you change the hostname to `0.0.0.0` for any reason, be aware that the `/v1/messages` endpoint will be accessible to anyone who can reach the host.
+
+### Debug logging
+
+`LOG_LEVEL=debug` logs full request payloads — user prompts, tool calls, and model responses — to stdout in plaintext. **Do not enable debug logging in shared or multi-user environments.** Use the default `info` level in any non-development setting.
+
+### Proxy API key
+
+`PROXY_API_KEY` protects the OpenAI endpoints (`/v1/chat/completions`, `/v1/models`). Use a randomly generated key of at least 32 characters. The server warns at startup if the key is shorter than 16 characters.
+
+---
+
 ## Development
 
 ```bash

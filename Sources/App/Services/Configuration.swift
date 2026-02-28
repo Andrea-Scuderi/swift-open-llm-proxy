@@ -211,8 +211,13 @@ struct ModelMapper: Sendable {
     let defaultModel: String
 
     func bedrockModelID(for model: String) -> String {
-        // 1. Native Bedrock ID passthrough (us./eu./ap. prefix or provider prefix)
-        if Self.bedrockProviderPrefixes.contains(where: { model.contains($0) }) { return model }
+        // 1. Native Bedrock ID passthrough — cross-region inference profile prefixes
+        //    (us./eu./ap.) or direct provider prefixes (anthropic., amazon., etc.).
+        //    Using hasPrefix prevents substring-match false positives such as
+        //    "hack.me.anthropic.test" incorrectly matching "anthropic.".
+        let crossRegionPrefixes = ["us.", "eu.", "ap."]
+        if crossRegionPrefixes.contains(where: { model.hasPrefix($0) }) { return model }
+        if Self.bedrockProviderPrefixes.contains(where: { model.hasPrefix($0) }) { return model }
         // 2. Short alias (gpt-4, claude-3-5-sonnet, nova-pro, etc.)
         if let mapped = Self.mapping[model] { return mapped }
         // 3. Human-readable name sent back by Xcode after GET /v1/models

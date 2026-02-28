@@ -4,6 +4,10 @@ public func configure(_ app: Application) async throws {
     let config = AppConfiguration()
     app.appConfiguration = config
 
+    // Bind to localhost only — the Anthropic /v1/messages endpoint is unauthenticated.
+    // This server is intended for local development use; do not expose it to a network.
+    app.http.server.configuration.hostname = "127.0.0.1"
+
     // Configure HTTP server port
     app.http.server.configuration.port = config.port
 
