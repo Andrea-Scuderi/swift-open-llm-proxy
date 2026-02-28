@@ -4,11 +4,7 @@
 [![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange?logo=swift&logoColor=white)](https://www.swift.org)
 [![Platform](https://img.shields.io/badge/platform-macOS%2015%2B%20%7C%20Linux-lightgrey)](https://github.com/Andrea-Scuderi/xcode-bedrock-bridge)
 
-```
-[ Xcode ] <───(PROXY_API_KEY)───> [ xcode-bedrock-bridge ] <───(IAM/BEDROCK_API_KEY)───> [ Amazon Bedrock ]
-    |                                      |                                                   |
- Local Dev                          Security & Proxy                                       Cloud LLMs
-```
+![xcode-bedrock-bridge](images/xcode-bedrock-bridge.jpg)
 
 Xcode Bedrock Bridge is a lightweight, high-performance proxy designed to connect your Apple development environment directly to Large Language Models on AWS.
 
@@ -31,6 +27,13 @@ Xcode Coding Agent          ──► POST /v1/messages             ─┤  (Vap
                                                                     Converse API
                                                                     (Claude models)
 ```
+
+```
+[ Xcode ] <───(PROXY_API_KEY)───> [ xcode-bedrock-bridge ] <───(IAM/BEDROCK_API_KEY)───> [ Amazon Bedrock ]
+    |                                      |                                                   |
+ Local Dev                          Security & Proxy                                       Cloud LLMs
+```
+
 
 Both Xcode integration modes are covered:
 
