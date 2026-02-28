@@ -71,7 +71,7 @@ struct MessagesController: RouteCollection {
         req.logger.debug("bedrockModelID: \(request.model) → \(modelID)")
         let messageID = "msg_\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
 
-        let (system, msgs, inferenceConfig, toolConfig) = requestTranslator.translate(request: request)
+        let (system, msgs, inferenceConfig, toolConfig) = try requestTranslator.translate(request: request, resolvedModelID: modelID)
 
         if request.stream == true {
             return try await handleStreaming(

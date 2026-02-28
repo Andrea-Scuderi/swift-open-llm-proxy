@@ -193,6 +193,21 @@ struct ModelMapper: Sendable {
         "Pegasus v1.2":                         "twelvelabs.pegasus-1-2-v1:0",
     ]
 
+    // Model prefixes that support image input via the Bedrock Converse API.
+    // Nova Micro, Llama 3.1/3.3, Mistral Large, DeepSeek R1, Cohere, AI21 are excluded.
+    private static let imageCapablePrefixes: [String] = [
+        "us.anthropic.claude-sonnet-4", "us.anthropic.claude-haiku-4", "us.anthropic.claude-opus-4",
+        "anthropic.claude-sonnet-4", "anthropic.claude-haiku-4", "anthropic.claude-opus-4",
+        "us.anthropic.claude-3", "anthropic.claude-3",
+        "us.amazon.nova-pro", "us.amazon.nova-lite", "amazon.nova-pro", "amazon.nova-lite",
+        "us.meta.llama3-2-90b", "us.meta.llama3-2-11b", "meta.llama3-2-90b", "meta.llama3-2-11b",
+        "us.mistral.pixtral-large", "mistral.pixtral-large",
+    ]
+
+    static func supportsImageInput(bedrockID: String) -> Bool {
+        imageCapablePrefixes.contains { bedrockID.hasPrefix($0) }
+    }
+
     let defaultModel: String
 
     func bedrockModelID(for model: String) -> String {

@@ -1,5 +1,83 @@
 import Vapor
 
+// MARK: - Image Translation Errors
+
+enum ImageTranslationError: AbortError, Sendable {
+    case unsupportedModel(String)
+    case unsupportedFormat(String)
+    case imageTooLarge(Int)       // estimated byte count
+
+    var status: HTTPResponseStatus {
+        switch self {
+        case .unsupportedModel, .unsupportedFormat: return .unprocessableEntity   // 422
+        case .imageTooLarge:                         return .payloadTooLarge        // 413
+        }
+    }
+    var reason: String {
+        switch self {
+        case .unsupportedModel(let id):
+            return "Model '\(id)' does not support image input."
+        case .unsupportedFormat(let fmt):
+            return "Unsupported image format '\(fmt)'. Allowed: jpeg, png, gif, webp."
+        case .imageTooLarge(let bytes):
+            return "Image (~\(bytes / 1024) KB estimated) exceeds the 3.75 MB Bedrock limit."
+        }
+    }
+}
+
+// MARK: - Image Types
+
+struct ImageData: Sendable {
+    let format: String      // "jpeg" | "png" | "gif" | "webp"
+    let base64Data: String  // raw base64 string (after the comma in a data URL)
+}
+
+enum MessagePart: Sendable {
+    case text(String)
+    case image(ImageData)
+}
+
+enum MessageContent: Sendable {
+    case text(String)
+    case parts([MessagePart])
+
+    var textOnly: String {
+        switch self {
+        case .text(let s): return s
+        case .parts(let ps):
+            return ps.compactMap { if case .text(let t) = $0 { return t } else { return nil } }.joined()
+        }
+    }
+
+    var hasImages: Bool {
+        if case .parts(let ps) = self {
+            return ps.contains { if case .image = $0 { return true } else { return false } }
+        }
+        return false
+    }
+
+    var asParts: [MessagePart] {
+        switch self {
+        case .text(let s): return [.text(s)]
+        case .parts(let ps): return ps
+        }
+    }
+}
+
+// MARK: - Data URL Parser
+
+private func parseDataURL(_ url: String) -> ImageData? {
+    guard url.hasPrefix("data:image/") else { return nil }
+    let afterImage = String(url.dropFirst(11))  // drop "data:image/"
+    guard let semiIdx = afterImage.firstIndex(of: ";") else { return nil }
+    let format = String(afterImage[afterImage.startIndex..<semiIdx])
+    let afterFmt = String(afterImage[semiIdx...].dropFirst())  // drop ";"
+    guard afterFmt.hasPrefix("base64,") else { return nil }
+    let base64Data = String(afterFmt.dropFirst(7))  // drop "base64,"
+    guard !base64Data.isEmpty else { return nil }
+    return ImageData(format: format, base64Data: base64Data)
+}
+
 // MARK: - Chat Completion Request
 
 struct ChatCompletionRequest: Content {
@@ -20,16 +98,13 @@ struct ChatCompletionRequest: Content {
 
 struct ChatMessage: Content {
     let role: String
-    /// Normalised plain-text content, regardless of whether the sender
-    /// sent a bare string or an array of content-part objects.
-    let content: String
+    /// Structured content — either a plain string or a list of parts (text + images).
+    let content: MessageContent
 
-    // OpenAI spec allows content to be either a String or an array of
-    // content-part objects: [{"type":"text","text":"..."}]
-    // Xcode 26 uses the array form, so we accept both.
+    /// Convenience init for plain-text content (used throughout production code and tests).
     init(role: String, content: String) {
         self.role = role
-        self.content = content
+        self.content = .text(content)
     }
 
     init(from decoder: any Decoder) throws {
@@ -38,11 +113,28 @@ struct ChatMessage: Content {
 
         // Try plain string first, then fall back to content-part array.
         if let plain = try? container.decode(String.self, forKey: .content) {
-            content = plain
+            content = .text(plain)
         } else {
             let parts = try container.decode([ContentPart].self, forKey: .content)
-            content = parts.compactMap { $0.type == "text" ? $0.text : nil }.joined()
+            let messageParts: [MessagePart] = parts.compactMap { part in
+                if part.type == "text", let text = part.text {
+                    return .text(text)
+                } else if part.type == "image_url",
+                          let imageURL = part.imageURL,
+                          let imageData = parseDataURL(imageURL.url) {
+                    return .image(imageData)
+                }
+                return nil
+            }
+            content = .parts(messageParts)
         }
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(role, forKey: .role)
+        // Images are input-only; responses always carry plain text.
+        try container.encode(content.textOnly, forKey: .content)
     }
 
     private enum CodingKeys: String, CodingKey { case role, content }
@@ -50,6 +142,16 @@ struct ChatMessage: Content {
     private struct ContentPart: Decodable {
         let type: String
         let text: String?
+        let imageURL: ImageURLPart?
+
+        enum CodingKeys: String, CodingKey {
+            case type, text
+            case imageURL = "image_url"
+        }
+    }
+
+    private struct ImageURLPart: Decodable {
+        let url: String
     }
 }
 

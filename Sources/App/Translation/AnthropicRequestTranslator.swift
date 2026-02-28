@@ -3,14 +3,23 @@ import SotoBedrockRuntime
 
 struct AnthropicRequestTranslator: Sendable {
 
-    func translate(request: AnthropicRequest) -> (
+    func translate(request: AnthropicRequest, resolvedModelID: String) throws -> (
         system: [BedrockRuntime.SystemContentBlock],
         messages: [BedrockRuntime.Message],
         inferenceConfig: BedrockRuntime.InferenceConfiguration,
         toolConfig: BedrockRuntime.ToolConfiguration?
     ) {
+        let hasImages = request.messages.contains { msg in
+            msg.content.blocks.contains { block in
+                block.type == "image" && block.source != nil
+            }
+        }
+        if hasImages && !ModelMapper.supportsImageInput(bedrockID: resolvedModelID) {
+            throw ImageTranslationError.unsupportedModel(resolvedModelID)
+        }
+
         let system = request.system.map { [BedrockRuntime.SystemContentBlock.text($0.plainText)] } ?? []
-        let messages = request.messages.compactMap { translateMessage($0) }
+        let messages = try request.messages.compactMap { try translateMessage($0) }
         let inferenceConfig = BedrockRuntime.InferenceConfiguration(
             maxTokens: request.maxTokens,
             temperature: request.temperature.map { Float($0) },
@@ -22,19 +31,19 @@ struct AnthropicRequestTranslator: Sendable {
 
     // MARK: - Messages
 
-    private func translateMessage(_ msg: AnthropicMessage) -> BedrockRuntime.Message? {
+    private func translateMessage(_ msg: AnthropicMessage) throws -> BedrockRuntime.Message? {
         let role: BedrockRuntime.ConversationRole
         switch msg.role {
         case "user":      role = .user
         case "assistant": role = .assistant
         default:          return nil
         }
-        let content = msg.content.blocks.compactMap { translateBlock($0) }
+        let content = try msg.content.blocks.compactMap { try translateBlock($0) }
         guard !content.isEmpty else { return nil }
         return BedrockRuntime.Message(content: content, role: role)
     }
 
-    private func translateBlock(_ block: AnthropicContentBlock) -> BedrockRuntime.ContentBlock? {
+    private func translateBlock(_ block: AnthropicContentBlock) throws -> BedrockRuntime.ContentBlock? {
         switch block.type {
         case "text":
             guard let text = block.text else { return nil }
@@ -55,9 +64,31 @@ struct AnthropicRequestTranslator: Sendable {
             }
             return .toolResult(BedrockRuntime.ToolResultBlock(content: resultContent, toolUseId: toolUseId))
 
+        case "image":
+            guard let source = block.source else { return nil }
+            return try translateImageSource(source)
+
         default:
             return nil
         }
+    }
+
+    private func translateImageSource(_ source: AnthropicImageSource) throws -> BedrockRuntime.ContentBlock {
+        guard source.mediaType.hasPrefix("image/") else {
+            throw ImageTranslationError.unsupportedFormat(source.mediaType)
+        }
+        let format = String(source.mediaType.dropFirst(6))  // drop "image/"
+        let allowedFormats = ["jpeg", "png", "gif", "webp"]
+        guard allowedFormats.contains(format),
+              let imageFormat = BedrockRuntime.ImageFormat(rawValue: format) else {
+            throw ImageTranslationError.unsupportedFormat(format)
+        }
+        let estimatedBytes = (source.data.count * 3) / 4
+        guard estimatedBytes <= 3_932_160 else {
+            throw ImageTranslationError.imageTooLarge(estimatedBytes)
+        }
+        let imageSource = BedrockRuntime.ImageSource.bytes(AWSBase64Data.base64(source.data))
+        return .image(BedrockRuntime.ImageBlock(format: imageFormat, source: imageSource))
     }
 
     // MARK: - Tools

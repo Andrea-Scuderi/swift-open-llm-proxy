@@ -31,17 +31,17 @@ struct AnthropicRequestTranslatorTests {
     }
 
     @Test("plain text system prompt extracted as one SystemContentBlock")
-    func plainTextSystemPromptExtracted() {
+    func plainTextSystemPromptExtracted() throws {
         let request = makeRequest(
             system: .text("Be helpful"),
             messages: [AnthropicMessage(role: "user", content: .text("Hi"))]
         )
-        let (system, _, _, _) = translator.translate(request: request)
+        let (system, _, _, _) = try translator.translate(request: request, resolvedModelID: "some-model")
         #expect(system.count == 1)
     }
 
     @Test("multi-block system prompt joined into one block")
-    func blocksSystemPromptJoined() {
+    func blocksSystemPromptJoined() throws {
         let request = makeRequest(
             system: .blocks([
                 AnthropicTextBlock(type: "text", text: "Block one"),
@@ -49,7 +49,7 @@ struct AnthropicRequestTranslatorTests {
             ]),
             messages: [AnthropicMessage(role: "user", content: .text("Hi"))]
         )
-        let (system, _, _, _) = translator.translate(request: request)
+        let (system, _, _, _) = try translator.translate(request: request, resolvedModelID: "some-model")
         #expect(system.count == 1)
         switch system[0] {
         case .text(let t):
@@ -61,29 +61,29 @@ struct AnthropicRequestTranslatorTests {
     }
 
     @Test("nil system produces empty array")
-    func nilSystemProducesEmptyArray() {
+    func nilSystemProducesEmptyArray() throws {
         let request = makeRequest(
             system: nil,
             messages: [AnthropicMessage(role: "user", content: .text("Hi"))]
         )
-        let (system, _, _, _) = translator.translate(request: request)
+        let (system, _, _, _) = try translator.translate(request: request, resolvedModelID: "some-model")
         #expect(system.isEmpty)
     }
 
     @Test("text content block translates to .text content block")
-    func textContentBlockTranslated() {
+    func textContentBlockTranslated() throws {
         let request = makeRequest(
             messages: [AnthropicMessage(role: "user", content: .blocks([
                 AnthropicContentBlock.text("Hello")
             ]))]
         )
-        let (_, messages, _, _) = translator.translate(request: request)
+        let (_, messages, _, _) = try translator.translate(request: request, resolvedModelID: "some-model")
         #expect(messages.count == 1)
         #expect(messages.first?.content.count == 1)
     }
 
     @Test("tool_use block translates to .toolUse content block")
-    func toolUseBlockTranslated() {
+    func toolUseBlockTranslated() throws {
         let block = AnthropicContentBlock(
             type: "tool_use",
             text: nil,
@@ -91,12 +91,13 @@ struct AnthropicRequestTranslatorTests {
             name: "my_tool",
             input: .object(["arg": .string("value")]),
             toolUseId: nil,
-            content: nil
+            content: nil,
+            source: nil
         )
         let request = makeRequest(
             messages: [AnthropicMessage(role: "user", content: .blocks([block]))]
         )
-        let (_, messages, _, _) = translator.translate(request: request)
+        let (_, messages, _, _) = try translator.translate(request: request, resolvedModelID: "some-model")
         #expect(messages.count == 1)
         guard let contentBlock = messages.first?.content.first else {
             Issue.record("Expected content block")
@@ -112,7 +113,7 @@ struct AnthropicRequestTranslatorTests {
     }
 
     @Test("tool_result block translates to .toolResult content block")
-    func toolResultBlockTranslated() {
+    func toolResultBlockTranslated() throws {
         let block = AnthropicContentBlock(
             type: "tool_result",
             text: nil,
@@ -120,12 +121,13 @@ struct AnthropicRequestTranslatorTests {
             name: nil,
             input: nil,
             toolUseId: "tool-123",
-            content: .text("the result")
+            content: .text("the result"),
+            source: nil
         )
         let request = makeRequest(
             messages: [AnthropicMessage(role: "user", content: .blocks([block]))]
         )
-        let (_, messages, _, _) = translator.translate(request: request)
+        let (_, messages, _, _) = try translator.translate(request: request, resolvedModelID: "some-model")
         #expect(messages.count == 1)
         guard let contentBlock = messages.first?.content.first else {
             Issue.record("Expected content block")
@@ -139,8 +141,8 @@ struct AnthropicRequestTranslatorTests {
         }
     }
 
-    @Test("unknown content block type is dropped")
-    func unknownContentBlockDropped() {
+    @Test("image block with nil source is dropped")
+    func unknownContentBlockDropped() throws {
         let block = AnthropicContentBlock(
             type: "image",
             text: nil,
@@ -148,25 +150,26 @@ struct AnthropicRequestTranslatorTests {
             name: nil,
             input: nil,
             toolUseId: nil,
-            content: nil
+            content: nil,
+            source: nil
         )
         let request = makeRequest(
             messages: [AnthropicMessage(role: "user", content: .blocks([block]))]
         )
-        let (_, messages, _, _) = translator.translate(request: request)
+        let (_, messages, _, _) = try translator.translate(request: request, resolvedModelID: "some-model")
         // Message with no valid content blocks is dropped entirely
         #expect(messages.isEmpty)
     }
 
     @Test("tool choice 'auto' translates to .auto")
-    func toolChoiceAutoTranslated() {
+    func toolChoiceAutoTranslated() throws {
         let tool = AnthropicTool(name: "my_tool", description: nil, inputSchema: .object([:]))
         let request = makeRequest(
             messages: [AnthropicMessage(role: "user", content: .text("Hi"))],
             tools: [tool],
             toolChoice: AnthropicToolChoice(type: "auto", name: nil)
         )
-        let (_, _, _, toolConfig) = translator.translate(request: request)
+        let (_, _, _, toolConfig) = try translator.translate(request: request, resolvedModelID: "some-model")
         guard let tc = toolConfig else {
             Issue.record("Expected non-nil toolConfig")
             return
@@ -184,14 +187,14 @@ struct AnthropicRequestTranslatorTests {
     }
 
     @Test("tool choice 'any' translates to .any")
-    func toolChoiceAnyTranslated() {
+    func toolChoiceAnyTranslated() throws {
         let tool = AnthropicTool(name: "my_tool", description: nil, inputSchema: .object([:]))
         let request = makeRequest(
             messages: [AnthropicMessage(role: "user", content: .text("Hi"))],
             tools: [tool],
             toolChoice: AnthropicToolChoice(type: "any", name: nil)
         )
-        let (_, _, _, toolConfig) = translator.translate(request: request)
+        let (_, _, _, toolConfig) = try translator.translate(request: request, resolvedModelID: "some-model")
         guard let tc = toolConfig else {
             Issue.record("Expected non-nil toolConfig")
             return
@@ -209,14 +212,14 @@ struct AnthropicRequestTranslatorTests {
     }
 
     @Test("tool choice 'tool' translates to .tool with name")
-    func toolChoiceSpecificToolTranslated() {
+    func toolChoiceSpecificToolTranslated() throws {
         let tool = AnthropicTool(name: "my_tool", description: nil, inputSchema: .object([:]))
         let request = makeRequest(
             messages: [AnthropicMessage(role: "user", content: .text("Hi"))],
             tools: [tool],
             toolChoice: AnthropicToolChoice(type: "tool", name: "my_tool")
         )
-        let (_, _, _, toolConfig) = translator.translate(request: request)
+        let (_, _, _, toolConfig) = try translator.translate(request: request, resolvedModelID: "some-model")
         guard let tc = toolConfig else {
             Issue.record("Expected non-nil toolConfig")
             return
@@ -234,27 +237,127 @@ struct AnthropicRequestTranslatorTests {
     }
 
     @Test("tool choice 'none' with no tools produces nil toolConfig")
-    func toolChoiceNoneProducesNilToolConfig() {
+    func toolChoiceNoneProducesNilToolConfig() throws {
         let request = makeRequest(
             messages: [AnthropicMessage(role: "user", content: .text("Hi"))],
             tools: nil,
             toolChoice: AnthropicToolChoice(type: "none", name: nil)
         )
-        let (_, _, _, toolConfig) = translator.translate(request: request)
+        let (_, _, _, toolConfig) = try translator.translate(request: request, resolvedModelID: "some-model")
         #expect(toolConfig == nil)
     }
 
     @Test("inference config set correctly from request fields")
-    func inferenceConfigFromAnthropicRequest() {
+    func inferenceConfigFromAnthropicRequest() throws {
         let request = makeRequest(
             messages: [AnthropicMessage(role: "user", content: .text("Hi"))],
             maxTokens: 512,
             temperature: 0.8,
             topP: 0.95
         )
-        let (_, _, inferenceConfig, _) = translator.translate(request: request)
+        let (_, _, inferenceConfig, _) = try translator.translate(request: request, resolvedModelID: "some-model")
         #expect(inferenceConfig.maxTokens == 512)
         #expect(abs((inferenceConfig.temperature ?? 0) - Float(0.8)) < Float(0.001))
         #expect(abs((inferenceConfig.topP ?? 0) - Float(0.95)) < Float(0.001))
+    }
+
+    // MARK: - Image Support
+
+    @Test("image block with valid source translates to .image content block")
+    func imageBlockWithValidSourceTranslated() throws {
+        let source = AnthropicImageSource(
+            type: "base64",
+            mediaType: "image/png",
+            data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+        )
+        let block = AnthropicContentBlock(
+            type: "image",
+            text: nil,
+            id: nil,
+            name: nil,
+            input: nil,
+            toolUseId: nil,
+            content: nil,
+            source: source
+        )
+        let request = makeRequest(
+            messages: [AnthropicMessage(role: "user", content: .blocks([block]))]
+        )
+        let modelID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+        let (_, messages, _, _) = try translator.translate(request: request, resolvedModelID: modelID)
+        #expect(messages.count == 1)
+        guard let contentBlock = messages.first?.content.first else {
+            Issue.record("Expected content block")
+            return
+        }
+        if case .image = contentBlock { } else {
+            Issue.record("Expected .image content block, got \(contentBlock)")
+        }
+    }
+
+    @Test("image block with unsupported model throws unsupportedModel")
+    func imageBlockWithUnsupportedModelThrows() throws {
+        let source = AnthropicImageSource(type: "base64", mediaType: "image/png", data: "abc=")
+        let block = AnthropicContentBlock(
+            type: "image",
+            text: nil,
+            id: nil,
+            name: nil,
+            input: nil,
+            toolUseId: nil,
+            content: nil,
+            source: source
+        )
+        let request = makeRequest(
+            messages: [AnthropicMessage(role: "user", content: .blocks([block]))]
+        )
+        #expect(throws: ImageTranslationError.self) {
+            try translator.translate(request: request, resolvedModelID: "us.amazon.nova-micro-v1:0")
+        }
+    }
+
+    @Test("image block with unsupported mediaType throws unsupportedFormat")
+    func imageBlockWithUnsupportedMediaTypeThrows() throws {
+        let source = AnthropicImageSource(type: "base64", mediaType: "image/bmp", data: "Qk0=")
+        let block = AnthropicContentBlock(
+            type: "image",
+            text: nil,
+            id: nil,
+            name: nil,
+            input: nil,
+            toolUseId: nil,
+            content: nil,
+            source: source
+        )
+        let request = makeRequest(
+            messages: [AnthropicMessage(role: "user", content: .blocks([block]))]
+        )
+        let modelID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+        #expect(throws: ImageTranslationError.self) {
+            try translator.translate(request: request, resolvedModelID: modelID)
+        }
+    }
+
+    @Test("image block exceeding size limit throws imageTooLarge")
+    func imageBlockExceedingSizeLimitThrows() throws {
+        let largeBase64 = String(repeating: "A", count: 5_300_000)
+        let source = AnthropicImageSource(type: "base64", mediaType: "image/jpeg", data: largeBase64)
+        let block = AnthropicContentBlock(
+            type: "image",
+            text: nil,
+            id: nil,
+            name: nil,
+            input: nil,
+            toolUseId: nil,
+            content: nil,
+            source: source
+        )
+        let request = makeRequest(
+            messages: [AnthropicMessage(role: "user", content: .blocks([block]))]
+        )
+        let modelID = "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+        #expect(throws: ImageTranslationError.self) {
+            try translator.translate(request: request, resolvedModelID: modelID)
+        }
     }
 }

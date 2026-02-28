@@ -23,7 +23,7 @@ struct ChatController: RouteCollection {
         req.logger.debug("bedrockModelID: \(chatRequest.model) → \(modelID)")
         let completionID = "chatcmpl-\(UUID().uuidString)"
 
-        let (system, messages, inferenceConfig) = requestTranslator.translate(
+        let (system, messages, inferenceConfig) = try requestTranslator.translate(
             request: chatRequest,
             modelID: modelID
         )

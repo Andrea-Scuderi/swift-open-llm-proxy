@@ -70,6 +70,19 @@ extension JSONValue {
     }
 }
 
+// MARK: - Image Source
+
+struct AnthropicImageSource: Codable, Sendable {
+    let type: String       // "base64" (only supported value)
+    let mediaType: String  // "image/jpeg" | "image/png" | "image/gif" | "image/webp"
+    let data: String       // base64-encoded bytes
+
+    enum CodingKeys: String, CodingKey {
+        case type, data
+        case mediaType = "media_type"
+    }
+}
+
 // MARK: - Content Blocks
 
 /// tool_result.content can be a plain string or an array of text blocks.
@@ -110,18 +123,20 @@ struct AnthropicContentBlock: Codable, Sendable {
     // tool_result
     let toolUseId: String?
     let content: AnthropicToolResultContent?
+    // image
+    let source: AnthropicImageSource?
 
     enum CodingKeys: String, CodingKey {
-        case type, text, id, name, input, content
+        case type, text, id, name, input, content, source
         case toolUseId = "tool_use_id"
     }
 
     static func text(_ text: String) -> AnthropicContentBlock {
-        .init(type: "text", text: text, id: nil, name: nil, input: nil, toolUseId: nil, content: nil)
+        .init(type: "text", text: text, id: nil, name: nil, input: nil, toolUseId: nil, content: nil, source: nil)
     }
 
     static func toolUse(id: String, name: String, input: JSONValue) -> AnthropicContentBlock {
-        .init(type: "tool_use", text: nil, id: id, name: name, input: input, toolUseId: nil, content: nil)
+        .init(type: "tool_use", text: nil, id: id, name: name, input: input, toolUseId: nil, content: nil, source: nil)
     }
 }
 

@@ -169,4 +169,56 @@ struct ModelMapperTests {
     func jamba15LargeNameResolvesToBedrockID() {
         #expect(mapper.bedrockModelID(for: "Jamba 1.5 Large") == "ai21.jamba-1-5-large-v1:0")
     }
+
+    // MARK: - supportsImageInput
+
+    @Test("Claude 3 Haiku supports image input")
+    func claude3HaikuSupportsImages() {
+        #expect(ModelMapper.supportsImageInput(bedrockID: "us.anthropic.claude-3-haiku-20240307-v1:0"))
+    }
+
+    @Test("Claude Sonnet 4.5 supports image input")
+    func claudeSonnet45SupportsImages() {
+        #expect(ModelMapper.supportsImageInput(bedrockID: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"))
+    }
+
+    @Test("Nova Pro supports image input")
+    func novaProSupportsImages() {
+        #expect(ModelMapper.supportsImageInput(bedrockID: "us.amazon.nova-pro-v1:0"))
+    }
+
+    @Test("Nova Lite supports image input")
+    func novaLiteSupportsImages() {
+        #expect(ModelMapper.supportsImageInput(bedrockID: "us.amazon.nova-lite-v1:0"))
+    }
+
+    @Test("Nova Micro does NOT support image input")
+    func novaMicroDoesNotSupportImages() {
+        #expect(!ModelMapper.supportsImageInput(bedrockID: "us.amazon.nova-micro-v1:0"))
+    }
+
+    @Test("Llama 3.2 90B supports image input")
+    func llama3290bSupportsImages() {
+        #expect(ModelMapper.supportsImageInput(bedrockID: "us.meta.llama3-2-90b-instruct-v1:0"))
+    }
+
+    @Test("Llama 3.1 405B does NOT support image input")
+    func llama31405bDoesNotSupportImages() {
+        #expect(!ModelMapper.supportsImageInput(bedrockID: "us.meta.llama3-1-405b-instruct-v1:0"))
+    }
+
+    @Test("Pixtral Large supports image input")
+    func pixtralLargeSupportsImages() {
+        #expect(ModelMapper.supportsImageInput(bedrockID: "us.mistral.pixtral-large-2502-v1:0"))
+    }
+
+    @Test("Mistral Large does NOT support image input")
+    func mistralLargeDoesNotSupportImages() {
+        #expect(!ModelMapper.supportsImageInput(bedrockID: "mistral.mistral-large-2407-v1:0"))
+    }
+
+    @Test("unknown model does NOT support image input")
+    func unknownModelDoesNotSupportImages() {
+        #expect(!ModelMapper.supportsImageInput(bedrockID: "some-unknown-model"))
+    }
 }
