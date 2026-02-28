@@ -187,6 +187,13 @@ protocol BedrockConversable: Sendable {
         inferenceConfig: BedrockRuntime.InferenceConfiguration,
         toolConfig: BedrockRuntime.ToolConfiguration?
     ) async throws -> AsyncThrowingStream<BedrockRuntime.ConverseStreamOutput, Error>
+
+    func converseStream(
+        modelID: String,
+        system: [BedrockRuntime.SystemContentBlock],
+        messages: [BedrockRuntime.Message],
+        inferenceConfig: BedrockRuntime.InferenceConfiguration
+    ) async throws -> AsyncThrowingStream<String, Error>
 }
 
 // MARK: - BedrockConversable Conformance

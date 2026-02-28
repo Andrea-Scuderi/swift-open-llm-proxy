@@ -9,7 +9,7 @@ private let maxModelNameLength   = 128
 private let maxMessageTextLength = 65_536   // chars per content block
 
 struct ChatController: RouteCollection {
-    let bedrockService: BedrockService
+    let bedrockService: any BedrockConversable
     let modelMapper: ModelMapper
     let requestTranslator: RequestTranslator
     let responseTranslator: ResponseTranslator
@@ -87,7 +87,8 @@ struct ChatController: RouteCollection {
                 modelID: modelID,
                 system: system,
                 messages: messages,
-                inferenceConfig: inferenceConfig
+                inferenceConfig: inferenceConfig,
+                toolConfig: nil
             )
             let openAIResponse = responseTranslator.translate(
                 response: bedrockResponse,

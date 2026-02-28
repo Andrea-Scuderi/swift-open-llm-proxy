@@ -50,8 +50,8 @@ struct AppConfigurationDefaultsTests {
 
     @Test("optionalBedrockService is nil before BedrockService is initialized")
     func optionalBedrockServiceIsNilBeforeInitialization() async throws {
-        let app = try await Application.make(.testing)
-        defer { Task { try await app.asyncShutdown() } }
-        #expect(app.optionalBedrockService == nil)
+        try await withApp({ _ in }) { app in
+            #expect(app.optionalBedrockService == nil)
+        }
     }
 }
