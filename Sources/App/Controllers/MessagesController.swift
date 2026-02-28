@@ -198,10 +198,16 @@ struct MessagesController: RouteCollection {
                 logger.debug("Streaming finalSSE stopReason=\(stopReason) outputTokens=\(outputTokens)")
                 try await writer.writeBuffer(ByteBuffer(string: finalSSE))
             } catch {
-                logger.error("Bedrock streaming error: \(error)")
-                let safeMsg = BedrockService.clientSafeReason(for: error)
-                let errorSSE = "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"\(safeMsg)\"}}\n\n"
-                try? await writer.writeBuffer(ByteBuffer(string: errorSSE))
+                // EPIPE / "Broken pipe" means the client disconnected mid-stream — not a server error.
+                let description = "\(error)"
+                if description.contains("Broken pipe") || description.contains("errno: 32") {
+                    logger.debug("Client disconnected mid-stream (broken pipe)")
+                } else {
+                    logger.error("Bedrock streaming error: \(error)")
+                    let safeMsg = BedrockService.clientSafeReason(for: error)
+                    let errorSSE = "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"\(safeMsg)\"}}\n\n"
+                    try? await writer.writeBuffer(ByteBuffer(string: errorSSE))
+                }
             }
             try? await writer.write(.end)
         })
