@@ -1,5 +1,9 @@
 # xcode-bedrock-bridge
 
+[![CI](https://github.com/Andrea-Scuderi/xcode-bedrock-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/Andrea-Scuderi/xcode-bedrock-bridge/actions/workflows/ci.yml)
+[![Swift 6.0](https://img.shields.io/badge/Swift-6.0-orange?logo=swift&logoColor=white)](https://www.swift.org)
+[![Platform](https://img.shields.io/badge/platform-macOS%2015%2B%20%7C%20Linux-lightgrey)](https://github.com/Andrea-Scuderi/xcode-bedrock-bridge)
+
 ```
 [ Xcode ] <───(PROXY_API_KEY)───> [ xcode-bedrock-bridge ] <───(IAM/BEDROCK_API_KEY)───> [ Amazon Bedrock ]
     |                                      |                                                   |
