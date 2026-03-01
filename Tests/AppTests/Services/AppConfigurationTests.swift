@@ -48,6 +48,13 @@ struct AppConfigurationDefaultsTests {
         #expect(config.bedrockAPIKey == nil)
     }
 
+    @Test("default bind host is 127.0.0.1 when BIND_HOST is not set")
+    func defaultBindHostIs127001() {
+        guard ProcessInfo.processInfo.environment["BIND_HOST"] == nil else { return }
+        let config = AppConfiguration()
+        #expect(config.bindHost == "127.0.0.1")
+    }
+
     @Test("optionalBedrockService is nil before BedrockService is initialized")
     func optionalBedrockServiceIsNilBeforeInitialization() async throws {
         try await withApp({ _ in }) { app in

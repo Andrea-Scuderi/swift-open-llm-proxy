@@ -1,0 +1,26 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    # env_file loads .env directly into the container as environment variables.
+    # Create .env from .env.example and fill in your credentials — it is gitignored.
+    env_file:
+      - .env
+    environment:
+      # Docker-specific overrides (take precedence over env_file values).
+      # These are not in .env because they must be set to fixed Docker values.
+      BIND_HOST: "0.0.0.0"
+      PORT: "8080"
+
+    # No ~/.aws volume mount — credentials are passed via env vars only.
+
+    healthcheck:
+      # /health is a dedicated probe — no auth, no AWS calls, always fast.
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    restart: unless-stopped

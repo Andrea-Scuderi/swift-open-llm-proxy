@@ -25,6 +25,12 @@ swift test
 
 # Run a single test (by name)
 swift test --filter "RouteTests/testModelsList"
+
+# Docker
+docker compose up --build        # build image and start
+docker compose up -d             # start in background
+docker compose logs -f app       # stream logs
+docker compose down              # stop and remove containers
 ```
 
 ## Architecture
@@ -88,6 +94,7 @@ Configuration is loaded in priority order: process env vars > `.env` (dotenv) > 
 | `PROXY_API_KEY` | — | Optional auth key for OpenAI endpoints |
 | `PORT` | `8080` | HTTP listen port |
 | `LOG_LEVEL` | `info` | Vapor log level (`debug` logs full request/response payloads) |
+| `BIND_HOST` | `127.0.0.1` | Bind address; set to `0.0.0.0` in Docker to accept container traffic |
 
 ## Key Dependencies
 

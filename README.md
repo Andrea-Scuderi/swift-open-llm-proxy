@@ -41,6 +41,7 @@ Both Xcode integration modes are covered:
 |---|---|---|
 | **Xcode Intelligence** — inline completions, editor chat | OpenAI | `GET /v1/models`, `POST /v1/chat/completions` |
 | **Xcode Coding Agent** — agentic coding with tools | Anthropic Messages | `POST /v1/messages`, `POST /v1/messages/count_tokens` |
+| **Health check** — Docker / load-balancer probe | — | `GET /health` |
 
 **What it supports:**
 - Streaming and non-streaming completions (SSE)
@@ -143,6 +144,55 @@ curl -N -X POST http://localhost:8080/v1/chat/completions \
     "stream": true
   }'
 ```
+
+---
+
+## Docker
+
+### Prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine + Compose plugin)
+
+### 1. Configure credentials
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and fill in your credentials (`.env` is gitignored — never committed):
+
+```bash
+# Option A — Bedrock API key (simplest)
+BEDROCK_API_KEY=your-bedrock-api-key
+
+# Option B — Scoped IAM user (create an IAM user with bedrock:* only)
+# AWS_ACCESS_KEY_ID=AKIA...
+# AWS_SECRET_ACCESS_KEY=...
+```
+
+### 2. Build and run
+
+```bash
+docker compose up --build
+```
+
+The proxy listens on `http://localhost:8080`.
+
+### 3. Verify
+
+```bash
+# Health check — no credentials needed
+curl http://localhost:8080/health
+
+# List models — requires valid AWS credentials
+curl http://localhost:8080/v1/models
+```
+
+### Notes
+
+- Credentials are loaded from `.env` via `env_file` in `docker-compose.yml` — no AWS credential files are mounted into the container.
+- The container binds to `0.0.0.0` (set via `BIND_HOST`) so Docker's port mapping works. The Anthropic `/v1/messages` endpoint is unauthenticated — set `PROXY_API_KEY` in `.env` and use a reverse proxy if you expose this service beyond localhost.
+- For cloud deployments (ECS, EC2), remove the credential env vars from `docker-compose.yml` and attach an IAM role to the instance/task instead.
 
 ---
 
@@ -292,9 +342,9 @@ LOG_LEVEL=debug swift run Run
 
 ### Localhost-only binding
 
-The server binds to `127.0.0.1` by default. The Anthropic `/v1/messages` endpoint (used by the Xcode Coding Agent) is unauthenticated — this proxy is designed exclusively for local development and should **never** be exposed to a wider network.
+The server binds to `127.0.0.1` by default. The Anthropic `/v1/messages` endpoint (used by the Xcode Coding Agent) is unauthenticated — this proxy is designed for local development and should **never** be exposed to a wider network without additional safeguards.
 
-If you change the hostname to `0.0.0.0` for any reason, be aware that the `/v1/messages` endpoint will be accessible to anyone who can reach the host.
+Set `BIND_HOST=0.0.0.0` (or use the provided `docker-compose.yml`) when running inside Docker — Docker's port mapping requires the server to accept connections on all interfaces inside the container. If you do this, ensure `PROXY_API_KEY` is set and consider placing the proxy behind a reverse proxy.
 
 ### Debug logging
 

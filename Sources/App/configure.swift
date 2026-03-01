@@ -4,9 +4,9 @@ public func configure(_ app: Application) async throws {
     let config = try await AppConfiguration.load()
     app.appConfiguration = config
 
-    // Bind to localhost only — the Anthropic /v1/messages endpoint is unauthenticated.
-    // This server is intended for local development use; do not expose it to a network.
-    app.http.server.configuration.hostname = "127.0.0.1"
+    // Bind host — defaults to 127.0.0.1 (localhost-only) for local dev safety.
+    // Set BIND_HOST=0.0.0.0 in Docker or when accepting remote connections.
+    app.http.server.configuration.hostname = config.bindHost
 
     // Configure HTTP server port
     app.http.server.configuration.port = config.port
@@ -30,6 +30,7 @@ public func configure(_ app: Application) async throws {
     }
     app.logger.info("Default Bedrock model: \(config.defaultBedrockModel)")
     app.logger.info("Port: \(config.port)")
+    app.logger.info("Bind host: \(config.bindHost)")
     if let key = config.proxyAPIKey {
         app.logger.info("API key authentication: enabled")
         if key.count < 16 {

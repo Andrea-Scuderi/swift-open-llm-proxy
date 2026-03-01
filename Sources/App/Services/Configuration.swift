@@ -10,6 +10,7 @@ struct AppConfiguration: Sendable {
     let defaultBedrockModel: String
     let proxyAPIKey: String?
     let port: Int
+    let bindHost: String
 
     init() {
         awsRegion = Environment.get("AWS_REGION") ?? "us-east-1"
@@ -21,6 +22,7 @@ struct AppConfiguration: Sendable {
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .flatMap { $0.isEmpty ? nil : $0 }
         port = Int(Environment.get("PORT") ?? "8080") ?? 8080
+        bindHost = Environment.get("BIND_HOST") ?? "127.0.0.1"
     }
 
     /// Reads all values from a pre-built ConfigReader.
@@ -34,6 +36,7 @@ struct AppConfiguration: Sendable {
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .flatMap { $0.isEmpty ? nil : $0 }
         port = reader.int(forKey: "port") ?? 8080
+        bindHost = reader.string(forKey: "bind.host") ?? "127.0.0.1"
     }
 
     /// Async factory — three-provider chain: process env > .env dotenv > config.json.

@@ -1,0 +1,17 @@
+.build/
+.swiftpm/
+.git/
+.github/
+# Tests/ must be present — SPM validates all target paths at planning time.
+.env
+config.json
+.netrc
+.DS_Store
+.vscode/
+*.xcuserstate
+xcuserdata/
+DerivedData/
+README.md
+CLAUDE.md
+SPECS.md
+LICENSE

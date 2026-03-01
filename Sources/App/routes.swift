@@ -9,6 +9,9 @@ public func routes(_ app: Application) throws {
     let anthropicRequestTranslator = AnthropicRequestTranslator()
     let anthropicResponseTranslator = AnthropicResponseTranslator()
 
+    // Health check — unauthenticated, no AWS calls, safe for Docker/load-balancer probes.
+    app.get("health") { _ in HTTPStatus.ok }
+
     // Build the protected route group if an API key is configured.
     // The Anthropic /v1/messages path (used by the Xcode Coding Agent via
     // ANTHROPIC_BASE_URL) is kept on a separate unprotected group because
